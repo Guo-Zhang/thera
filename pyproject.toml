@@ -9,6 +9,17 @@ dependencies = []
 [project.scripts]
 thera = "thera.__main__:main"
 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["thera"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=thera --cov-report=term-missing"
