@@ -4,9 +4,8 @@
 import unittest
 from unittest.mock import patch
 from io import StringIO
-import sys
 
-from thera.cli import TheraCLI
+from src.thera.cli import TheraCLI
 
 
 class TestTheraCLI(unittest.TestCase):

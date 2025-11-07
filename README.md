@@ -1,114 +1,133 @@
-# `thera`
+# thera
 
-苹果的AI外脑系统
+轻量级 AI 外脑示例工具包（面向 macOS / 开发者）。
 
-## 安装
+主要目标：提供一个小型交互式 CLI、示例的大模型客户端封装（兼容 OpenAI 风格接口），以及可运行的测试示例，便于学习与扩展。
 
-本项目需要 Python 3.14 或更高版本。
+---
 
-### 开发环境安装
+## 要求
 
-1. 克隆项目：
+- Python 3.14+
+- 推荐使用虚拟环境（venv / pyenv / conda 等）
+
+---
+
+## 快速开始（开发者）
+
+克隆仓库并进入项目目录：
+
 ```bash
 git clone https://github.com/Guo-Zhang/thera.git
 cd thera
 ```
 
-2. 创建并激活虚拟环境（推荐）：
+创建并激活虚拟环境（macOS / Linux 示例）：
+
 ```bash
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
 source .venv/bin/activate
 ```
 
-3. 安装开发版本：
+安装项目（可编辑模式，便于开发）：
+
 ```bash
 pip install -e .
 ```
 
-## 使用方法
+运行交互式 CLI：
 
-安装完成后，可以通过命令行使用 `thera` 命令：
-
-### 基本命令
-
-1. 显示帮助信息：
 ```bash
 thera
 ```
 
-2. 查看版本：
+查看版本：
+
 ```bash
 thera --version
 ```
 
+---
+
 ## 项目结构
 
 ```
-thera/
-├── src/
-│   └── thera/          # 主程序包
-│       ├── __init__.py
-│       ├── __main__.py # 命令行入口
-│       └── cli.py      # 交互式命令行实现
-├── tests/             # 测试目录
+.
+├── pyproject.toml       # 项目及依赖配置
+├── README.md            # 本文件
+├── src/thera            # Python 包源码
 │   ├── __init__.py
-│   └── test_cli.py    # CLI模块测试
-├── data/              # 数据目录
-├── docs/             # 文档目录
-├── pyproject.toml    # 项目配置
-└── README.md         # 项目说明
+   ├── __main__.py
+   ├── cli.py           # 交互式 CLI
+   └── llm.py           # DeepSeek / OpenAI-兼容客户端封装示例
+└── tests/               # 单元测试
+	├── test_cli.py
+	└── test_llm.py
 ```
 
-## 开发
+---
 
-要添加新的命令行功能，在 `src/thera/cli.py` 中的 `TheraCLI` 类添加新的命令方法。例如，添加一个名为 `hello` 的命令：
+## 测试（使用 uv + pytest）
 
-```python
-def do_hello(self, arg):
-    """打招呼"""
-    print("你好！")
-```
+本仓库示例使用 `pytest` 作为主要测试工具，并在 README 中统一使用 `uv run` 作为命令前缀以适配使用 `uv` 的工作流（如果你没有 `uv`，也可以直接运行同样的命令，例如 `pytest` 或 `python -m unittest`）。
 
-## 测试
-
-本项目使用 pytest 进行测试。测试用例位于 `tests` 目录下。
-
-### 安装测试依赖
+1. 安装测试依赖：
 
 ```bash
 pip install -e ".[test]"
 ```
 
-### 运行测试
+2. 使用 `uv` 运行 pytest：
 
-运行所有测试：
 ```bash
-pytest
+uv run pytest -v
 ```
 
-查看测试覆盖率报告：
+3. 查看覆盖率（pytest-cov）：
+
 ```bash
-pytest --cov=thera --cov-report=term-missing
+uv run pytest --cov=thera --cov-report=term-missing
 ```
 
-### 编写测试
+4. （可选）运行基于标准库 unittest 的发现器：
 
-新的测试用例应该添加到 `tests` 目录中。测试文件命名应遵循 `test_*.py` 的模式。例如：
+```bash
+uv run python -m unittest discover -v
+```
+
+注：`uv run` 是一个通用的命令包装前缀，用于在某些环境中确保命令在正确的虚拟环境或容器上下文中执行。如果你的系统没有 `uv`，直接运行后面的命令同样有效。
+
+---
+
+## 开发说明
+
+- 添加 CLI 命令：在 `src/thera/cli.py` 的 `TheraCLI` 类中添加 `do_<命令名>` 方法即可自动成为新的交互命令。
+- 大模型客户端示例：`src/thera/llm.py` 中包含 `DeepSeekClient`，它封装了对 OpenAI 兼容接口（例如 DeepSeek）的基本调用逻辑。真实调用时请设置 `OPENAI_API_KEY` 环境变量或在构造时传入 `api_key`。
+
+示例：
 
 ```python
-import unittest
-from thera.cli import TheraCLI
+from thera.llm import DeepSeekClient
 
-class TestNewFeature(unittest.TestCase):
-    def setUp(self):
-        self.cli = TheraCLI()
-    
-    def test_new_command(self):
-        """测试新命令"""
-        result = self.cli.do_new_command("")
-        self.assertEqual(result, expected_result)
+client = DeepSeekClient(api_key="<your-key>")
+print(client.generate("写一段关于测试驱动开发的简介。"))
+```
+
+---
+
+## 贡献
+
+欢迎 PR、Issue 与讨论。贡献时请遵守以下建议：
+
+- 每个新功能附带测试。
+- 在本地运行测试并通过：`uv run pytest`。
+- 保持提交信息清晰。
+
+---
+
+## 许可证
+
+见仓库根目录的 `LICENSE` 文件。
+
 ```
 
