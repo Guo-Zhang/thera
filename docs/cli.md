@@ -66,3 +66,13 @@ thera> hello 小明
 3. 文档字符串用于生成帮助信息
 4. 返回 `True` 将退出程序
 5. 返回 `False` 或 `None` 继续交互循环
+
+### 文档管理命令
+
+以下命令可用于管理知识图谱中的文档：
+
+- `import_docs`: 导入 dev_docs 目录中的所有 Markdown 文件到知识图谱
+- `import_docs <path>`: 导入指定目录中的文档到知识图谱
+- `list_docs`: 列出已导入的知识文档
+
+这些 commands 使用 DocsImporter 类将文档内容作为 Episodes 添加到 Graphiti 知识图谱中，每个文件包含其路径、分类和完整内容。
