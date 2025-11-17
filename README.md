@@ -1,19 +1,23 @@
 # thera
 
-轻量级 AI 外脑示例工具包（面向 macOS / 开发者）。
+智能 AI 外脑系统（面向 macOS / 开发者）。
 
-主要目标：提供一个小型交互式 CLI、示例的大模型客户端封装（兼容 OpenAI 风格接口），以及可运行的测试示例，便于学习与扩展。
+主要功能：提供交互式 CLI、大模型客户端封装（兼容 OpenAI 风格接口），以及 Graphiti 知识图谱集成，构建智能知识管理与对话系统。
 
 ---
 
 ## 要求
 
-- Python 3.14+
+- Python 3.10+
+- Neo4j 数据库（用于知识图谱存储）
+- OpenAI API 密钥或兼容 API 密钥
 - 推荐使用虚拟环境（venv / pyenv / conda 等）
 
 ---
 
 ## 快速开始（开发者）
+
+### 1. 环境准备
 
 克隆仓库并进入项目目录：
 
@@ -22,18 +26,30 @@ git clone https://github.com/Guo-Zhang/thera.git
 cd thera
 ```
 
-创建并激活虚拟环境（macOS / Linux 示例）：
+创建并激活虚拟环境：
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 ```
 
-安装项目（可编辑模式，便于开发）：
+使用 uv 安装依赖：
 
 ```bash
-pip install -e .
+uv sync --dev
 ```
+
+### 2. 配置环境变量
+
+创建 `.env` 文件（参考 `.env.example`）：
+
+```bash
+# 复制环境变量模板
+cp .env.example .env
+# 编辑 .env 文件，设置你的 API 密钥和数据库连接
+```
+
+### 3. 启动系统
 
 运行交互式 CLI：
 
@@ -47,70 +63,151 @@ thera
 thera --version
 ```
 
+运行功能演示：
+
+```bash
+thera
+# 在 CLI 中输入: demo
+```
+
 ---
 
 ## 项目结构
 
 ```
 .
-├── pyproject.toml       # 项目及依赖配置
-├── README.md            # 本文件
-├── src/thera            # Python 包源码
+├── pyproject.toml          # 项目及依赖配置
+├── README.md               # 本文件
+├── src/thera               # Python 包源码
 │   ├── __init__.py
-   ├── __main__.py
-   ├── cli.py           # 交互式 CLI
-   └── llm.py           # DeepSeek / OpenAI-兼容客户端封装示例
-└── tests/               # 单元测试
-	├── test_cli.py
-	└── test_llm.py
+│   ├── __main__.py         # 主入口文件
+│   ├── cli.py              # 交互式 CLI
+│   ├── llm.py              # DeepSeek / OpenAI-兼容客户端，含 Graphiti 集成
+│   ├── config.py           # 配置管理
+│   └── main.py             # 主系统类 Thera
+├── tests/                  # 单元测试
+│   ├── test_cli.py
+│   └── test_llm.py
+├── examples/               # 示例代码
+│   ├── graphiti.py         # Graphiti 示例
+│   ├── llm.py              # 基础 LLM 示例
+│   └── config.py           # 示例配置
+└── .claude/                # Claude Code 配置
+    └── commands/thera.md   # Thera 命令快捷方式
 ```
 
 ---
 
-## 测试（使用 uv + pytest）
+## 测试
 
-本仓库示例使用 `pytest` 作为主要测试工具，并在 README 中统一使用 `uv run` 作为命令前缀以适配使用 `uv` 的工作流（如果你没有 `uv`，也可以直接运行同样的命令，例如 `pytest` 或 `python -m unittest`）。
-
-1. 安装测试依赖：
+使用 uv 运行测试：
 
 ```bash
-pip install -e ".[test]"
-```
-
-2. 使用 `uv` 运行 pytest：
-
-```bash
+# 运行所有测试
 uv run pytest -v
-```
 
-3. 查看覆盖率（pytest-cov）：
-
-```bash
+# 查看测试覆盖率
 uv run pytest --cov=thera --cov-report=term-missing
 ```
 
-4. （可选）运行基于标准库 unittest 的发现器：
+## 核心功能
 
-```bash
-uv run python -m unittest discover -v
+### 智能对话
+```python
+from thera.main import Thera
+import asyncio
+
+async def example():
+    async with Thera() as thera:
+        # 结合知识图谱的智能对话
+        response = await thera.chat_with_knowledge("Python 有哪些特性?")
+        print(f"回答: {response['response']}")
+        print(f"参考知识: {response['knowledge_references']}")
+
+asyncio.run(example())
 ```
 
-注：`uv run` 是一个通用的命令包装前缀，用于在某些环境中确保命令在正确的虚拟环境或容器上下文中执行。如果你的系统没有 `uv`，直接运行后面的命令同样有效。
+### 知识管理
+```python
+# 添加知识
+thera.add_knowledge_sync("Python特性", "Python 是一种高级编程语言，具有简洁的语法和强大的标准库。")
+
+# 搜索知识
+results = thera.search_knowledge_sync("编程语言")
+```
+
+### 基础聊天
+```python
+client = DeepSeekClient()
+response = client.generate("写一段关于机器学习的简介")
+```
 
 ---
 
 ## 开发说明
 
+### CLI 开发
 - 添加 CLI 命令：在 `src/thera/cli.py` 的 `TheraCLI` 类中添加 `do_<命令名>` 方法即可自动成为新的交互命令。
-- 大模型客户端示例：`src/thera/llm.py` 中包含 `DeepSeekClient`，它封装了对 OpenAI 兼容接口（例如 DeepSeek）的基本调用逻辑。真实调用时请设置 `OPENAI_API_KEY` 环境变量或在构造时传入 `api_key`。
 
-示例：
+### 核心模块说明
+- `thera.main.Thera` - 主系统类，集成 LLM 和 Graphiti 功能
+- `thera.llm.DeepSeekClient` - 兼容 OpenAI 接口的大模型客户端
+- `thera.llm.GraphitiClient` - Graphiti 知识图谱客户端
+- `thera.config.settings` - 配置管理
 
+### 环境配置
+创建一个 `.env` 文件，包含以下变量：
+```bash
+LLM_API_KEY=your_api_key
+LLM_BASE_URL=https://api.siliconflow.cn/v1/
+LLM_MODEL=deepseek-ai/DeepSeek-V3.1-Terminus
+LLM_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-8B
+LLM_RERANKER_MODEL=Qwen/Qwen3-Reranker-8B
+NEO4J_URI=neo4j://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_password
+```
+
+或直接复制模板：
+```bash
+cp .env.example .env
+# 然后编辑 .env 文件填入真实值
+```
+
+### Claude Code 集成
+项目已配置 Claude Code，可使用 `/thera` 快捷命令：
+- `/thera chat <消息>` - 智能对话
+- `/thera add <标题> <内容>` - 添加知识
+- `/thera search <查询>` - 搜索知识图谱
+
+### 文档导入
+项目提供文档导入功能，可将文档内容自动导入到知识图谱：
+
+#### CLI 交互模式
+```bash
+thera
+# 在 CLI 中执行:
+import_docs                # 导入 dev_docs 目录
+import_docs /path/to/docs  # 导入指定目录
+list_docs                  # 列出已导入文档
+```
+
+#### 独立脚本
+```bash
+# 使用独立脚本导入
+dev_docs.py
+```
+
+#### 编程方式
 ```python
-from thera.llm import DeepSeekClient
+from thera.docs_importer import DocsImporter
+import asyncio
 
-client = DeepSeekClient(api_key="<your-key>")
-print(client.generate("写一段关于测试驱动开发的简介。"))
+async def import_docs():
+    async with DocsImporter() as importer:
+        await importer.import_dev_docs()  # 导入 dev_docs
+
+asyncio.run(import_docs())
 ```
 
 ---
