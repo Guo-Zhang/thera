@@ -1,4 +1,4 @@
-# thera
+# `thera`：苹果的AI外脑系统
 
 智能 AI 外脑系统（面向 macOS / 开发者）。
 
