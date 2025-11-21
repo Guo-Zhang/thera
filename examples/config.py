@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     neo4j_user: str
     neo4j_password: str
     neo4j_database: str = 'neo4j'
+    neo4j_index_name: str = 'thera'
 
     llm_api_key: str
     llm_base_url: str
