@@ -52,7 +52,7 @@ class MessagePanel(Vertical):
             self.input_bar.focus()  # 发送后重新聚焦
 
 
-class MessageView(App):
+class MessageScreen(App):
     """独立的消息视图应用"""
     BINDINGS = [
         Binding("ctrl+j", "send_message", "发送"),
@@ -73,7 +73,7 @@ class MessageView(App):
 
 
 def main() -> None:
-    app = MessageView()
+    app = MessageScreen()
     app.run()
 
 
