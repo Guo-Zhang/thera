@@ -1,5 +1,11 @@
 """
-thera.screens.dialogue_screen 的 Docstring
+对话屏幕 - 基于 Textual 的双栏对话界面（聊天 + 便签）
+
+提供左侧聊天区域和右侧便签列表的交互式对话界面，支持：
+- 实时聊天对话展示
+- 自动保存 AI 回复为便签
+- 双栏响应式布局
+- 消息分类样式展示
 """
 from textual import on
 from textual.app import App, ComposeResult
@@ -11,65 +17,7 @@ from textual.widgets import Input, Static, ListView, ListItem, Footer
 class DialogueScreen(Screen):
     """主对话界面：左侧聊天 + 右侧便签列表"""
 
-    CSS = """
-    #chat-container {
-        width: 70%;
-        height: 100%;
-        border-right: solid #444;
-    }
-
-    #notes-container {
-        width: 30%;
-        height: 100%;
-        padding: 1 2;
-    }
-
-    #chat-history {
-        height: 1fr;
-        overflow-y: auto;
-        scrollbar-size-vertical: 1;
-    }
-
-    .user-message {
-        background: #4a6fa5;
-        color: white;
-        padding: 1 2;
-        margin: 1 2 1 10;
-        width: 80%;
-        text-align: right;
-    }
-
-    .ai-message {
-        background: #333;
-        color: #ddd;
-        padding: 1 2;
-        margin: 1 10 1 2;
-        width: 80%;
-        text-align: left;
-    }
-
-    #user-input {
-        height: auto;
-        padding: 1 2;
-    }
-
-    #notes-title {
-        text-style: bold;
-        margin-bottom: 1;
-    }
-
-    ListView {
-        height: 1fr;
-    }
-
-    ListItem {
-        padding: 1 0;
-    }
-
-    ListItem:hover {
-        background: #2a2a2a;
-    }
-    """
+    CSS_PATH = "dialogue_screen.tcss"
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
@@ -122,6 +70,7 @@ class DialogueScreen(Screen):
         notes_list = self.query_one("#notes-list", ListView)
         note_summary = f"• {ai_reply[:40]}..."
         notes_list.append(ListItem(Static(note_summary)))
+
 class DialogueApp(App):
     """主应用入口"""
 
