@@ -214,3 +214,6 @@ data/
 
 # secrets
 .secrets.yaml
+
+# mac
+.DS_Store
