@@ -61,7 +61,7 @@ class FragmentAnalyzer:
         self._load_documents()
 
     def _load_toc(self):
-        """从 _toc.yml 加载文档分类"""
+        """从 _toc.yml 加载文档分类，只提取片段和正文"""
         import yaml
 
         toc_path = self.jupyterbook_path / "_toc.yml"
@@ -71,7 +71,7 @@ class FragmentAnalyzer:
         with open(toc_path, 'r', encoding='utf-8') as f:
             toc = yaml.safe_load(f)
 
-        # 解析 YAML，提取片段和正文的标题
+        # 解析 YAML，只提取片段和正文的标题
         current_part = None
         for item in toc:
             if isinstance(item, str):
@@ -79,6 +79,7 @@ class FragmentAnalyzer:
             elif isinstance(item, dict):
                 if 'part' in item:
                     current_part = item['part']
+                    # 只处理"片段"和"正文"部分
                     if current_part == '片段':
                         if 'chapters' in item:
                             for chapter in item['chapters']:
@@ -99,7 +100,7 @@ class FragmentAnalyzer:
         return title if title else None
 
     def _load_documents(self):
-        """加载所有文档"""
+        """只加载片段和正文，忽略辅助文本"""
         md_files = list(self.jupyterbook_path.glob("*.md"))
 
         for md_file in md_files:
@@ -107,6 +108,10 @@ class FragmentAnalyzer:
                 continue
 
             title = md_file.stem
+
+            # 只处理在 toc 中明确标记为片段或正文的文档
+            if title not in self.fragment_titles and title not in self.main_text_titles:
+                continue
 
             with open(md_file, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -120,14 +125,6 @@ class FragmentAnalyzer:
             elif title in self.main_text_titles:
                 doc_info.location = "正文"
                 self.main_texts.append(doc_info)
-            else:
-                # 根据内容长度自动判断
-                if doc_info.word_count < 500:
-                    doc_info.location = "片段（推测）"
-                    self.fragments.append(doc_info)
-                else:
-                    doc_info.location = "正文（推测）"
-                    self.main_texts.append(doc_info)
 
             self.documents[title] = doc_info
 
