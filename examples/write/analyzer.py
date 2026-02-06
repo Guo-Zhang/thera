@@ -5,10 +5,18 @@
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 import re
 from collections import Counter
 from dataclasses import dataclass
+
+
+@dataclass
+class Dialogue:
+    """对话信息"""
+    text: str
+    speaker: Optional[str] = None
+    position: int = 0
 
 
 @dataclass
@@ -19,6 +27,7 @@ class DocumentInfo:
     word_count: int
     paragraph_count: int
     dialogue_count: int
+    dialogues: List[Dialogue]
     location: str  # 片段/正文
 
 
@@ -137,8 +146,9 @@ class FragmentAnalyzer:
         # 统计字数（中文）
         word_count = len(re.sub(r'\s+', '', content))
 
-        # 统计对话数量
-        dialogue_count = len(re.findall(r'["「『]', content))
+        # 提取对话
+        dialogues = self.extract_dialogues(content)
+        dialogue_count = len(dialogues)
 
         return DocumentInfo(
             title=title,
@@ -146,8 +156,85 @@ class FragmentAnalyzer:
             word_count=word_count,
             paragraph_count=paragraph_count,
             dialogue_count=dialogue_count,
+            dialogues=dialogues,
             location="未知"
         )
+
+    def extract_dialogues(self, text: str) -> List[Dialogue]:
+        """
+        提取中文文本中的对话
+
+        支持中文引号：" " ' ' 「」 『』
+        以及 Unicode 标点：U+201C (") U+201D (") U+2018 (') U+2019 (')
+        处理跨段落引号、同一句中多段引号
+
+        Args:
+            text: 文本内容
+
+        Returns:
+            对话列表
+        """
+        dialogues = []
+
+        # 中文弯引号 U+201C (" ) 和 U+201D (" )
+        left_wavy_double = '\u201c'
+        right_wavy_double = '\u201d'
+        pattern_wavy_double = re.compile(f'{left_wavy_double}(.*?){right_wavy_double}', re.DOTALL)
+        for match in pattern_wavy_double.finditer(text):
+            dialogue_text = match.group(1).strip()
+            if dialogue_text:
+                dialogues.append(Dialogue(text=dialogue_text, position=match.start()))
+
+        # 中文单弯引号 U+2018 (') 和 U+2019 (')
+        left_wavy_single = '\u2018'
+        right_wavy_single = '\u2019'
+        pattern_wavy_single = re.compile(f'{left_wavy_single}(.*?){right_wavy_single}', re.DOTALL)
+        for match in pattern_wavy_single.finditer(text):
+            dialogue_text = match.group(1).strip()
+            if dialogue_text:
+                dialogues.append(Dialogue(text=dialogue_text, position=match.start()))
+
+        # ASCII 双引号 "
+        pattern_ascii_double = re.compile(r'"([^"]*)"')
+        for match in pattern_ascii_double.finditer(text):
+            dialogue_text = match.group(1).strip()
+            if dialogue_text:
+                dialogues.append(Dialogue(text=dialogue_text, position=match.start()))
+
+        # ASCII 单引号 '
+        pattern_ascii_single = re.compile(r"'([^']*)'")
+        for match in pattern_ascii_single.finditer(text):
+            dialogue_text = match.group(1).strip()
+            if dialogue_text:
+                dialogues.append(Dialogue(text=dialogue_text, position=match.start()))
+
+        # 直角引号 「」
+        pattern_corner = re.compile(r'「([^」]*)」')
+        for match in pattern_corner.finditer(text):
+            dialogue_text = match.group(1).strip()
+            if dialogue_text:
+                dialogues.append(Dialogue(text=dialogue_text, position=match.start()))
+
+        # 二重直角引号 『』
+        pattern_corner_double = re.compile(r'『([^』]*)』')
+        for match in pattern_corner_double.finditer(text):
+            dialogue_text = match.group(1).strip()
+            if dialogue_text:
+                dialogues.append(Dialogue(text=dialogue_text, position=match.start()))
+
+        # 去重（避免同一对话被多个模式匹配）
+        unique_dialogues = []
+        seen = set()
+        for d in dialogues:
+            key = (d.text, d.position)
+            if key not in seen:
+                seen.add(key)
+                unique_dialogues.append(d)
+
+        # 按位置排序
+        unique_dialogues.sort(key=lambda x: x.position)
+
+        return unique_dialogues
 
     def extract_keywords(self, text: str, top_n: int = 10) -> List[str]:
         """
@@ -329,6 +416,10 @@ class FragmentAnalyzer:
                 "dialogue_count": fragment.dialogue_count,
                 "keywords": self.extract_keywords(fragment.content, top_n=5),
                 "locations": self.extract_locations(fragment.content),
+                "dialogues": [
+                    {"text": d.text, "speaker": d.speaker, "position": d.position}
+                    for d in fragment.dialogues[:5]
+                ] if fragment.dialogues else [],  # 前5条对话示例
                 "best_matches": [
                     {
                         "title": match.document.title,
@@ -395,6 +486,11 @@ class FragmentAnalyzer:
             print(f"   字数: {fragment['word_count']} | 段落: {fragment['paragraph_count']} | 对话: {fragment['dialogue_count']}")
             print(f"   关键词: {', '.join(fragment['keywords'])}")
             print(f"   地点: {', '.join(fragment['locations']) if fragment['locations'] else '无'}")
+
+            if fragment['dialogues']:
+                print(f"   对话示例:")
+                for dialogue in fragment['dialogues'][:3]:
+                    print(f'     - "{dialogue["text"]}"')
 
             if fragment['best_matches']:
                 print(f"   最佳匹配:")
