@@ -13,7 +13,7 @@ from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 
-from config import settings
+from examples.knowl.config import settings
 
 
 # Graphiti配置

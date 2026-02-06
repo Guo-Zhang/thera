@@ -9,7 +9,7 @@ from neo4j_graphrag.llm import OpenAILLM
 from neo4j_graphrag.generation import GraphRAG
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
 
-from config import settings
+from examples.knowl.config import settings
 
 # Connect to Neo4j database
 driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))

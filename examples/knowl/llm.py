@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-from config import settings
+from examples.knowl.config import settings
 
 def main():
     client = OpenAI(api_key=settings.llm_api_key, 
