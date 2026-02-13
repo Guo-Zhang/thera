@@ -1,8 +1,8 @@
 """
 目标：从人工挑选个别文章到自主发现新知识。
 输入：
-- 路径：项目根目录 `data/docs`的 article1-5
-- 内容：从近期文章中选取和公司相关的 3-5 篇文本作为原始素材。
+- 路径：项目根目录 `data/docs`的 article1-10
+- 内容：从近期文章中选取代表性文本作为原始素材。
 - 格式：知识是文本格式，文本长度约 1000-2000 字左右，即 iGuo 说公众号文本长度。暂不处理多模态、对话级短文本或者书籍级超长文本、专注于文章级文本。
 输出：
 - 内容：
@@ -16,16 +16,15 @@
 
 import json
 import re
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
+import numpy as np
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
 
 from examples.knowl.config import settings
-
 
 DOCS_DIR = Path("data/docs")
 KNOWL_DIR = Path("data/knowl")
@@ -293,11 +292,11 @@ def export_html(markdown_path: Path, html_path: Path):
     <title>知识发现报告</title>
     <style>
         @page {{ size: A4; margin: 2cm; }}
-        body {{ 
-            font-family: "PingFang SC", "Microsoft YaHei", "SimSun", sans-serif; 
-            font-size: 12pt; 
-            line-height: 1.6; 
-            color: #333; 
+        body {{
+            font-family: "PingFang SC", "Microsoft YaHei", "SimSun", sans-serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            color: #333;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
