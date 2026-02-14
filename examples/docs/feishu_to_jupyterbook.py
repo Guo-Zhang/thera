@@ -190,7 +190,7 @@ def convert_document_to_markdown(doc_file: Path) -> str:
     Returns:
         str: Markdown 内容
     """
-    with open(doc_file, 'r', encoding='utf-8') as f:
+    with open(doc_file, "r", encoding="utf-8") as f:
         doc_data = json.load(f)
 
     title = doc_data.get("title", "Untitled")
@@ -206,29 +206,87 @@ def convert_document_to_markdown(doc_file: Path) -> str:
     return markdown
 
 
-def convert_directory(input_dir: Path, output_dir: Path) -> None:
-    """转换目录下的所有飞书文档为 Markdown
+def get_safe_filename(title: str) -> str:
+    """生成安全的文件名"""
+    safe = "".join(
+        c for c in title if c.isalnum() or c in (" ", "-", "_", "：", "、", "，", "。")
+    ).strip()
+    return safe if safe else "unnamed"
+
+
+def convert_directory_with_tree(
+    input_dir: Path, output_dir: Path, directory_json: Path
+) -> None:
+    """根据目录树结构转换飞书文档为 Markdown
 
     Args:
         input_dir: 飞书文档 JSON 目录
         output_dir: 输出 Markdown 目录
+        directory_json: 飞书目录结构 JSON 文件
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # 读取目录树
+    with open(directory_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 建立 node_token -> title 的映射
+    node_map = {}  # obj_token -> (title, path_components)
+
+    def process_node(node: dict, path_parts: list[str]):
+        title = node.get("title", "Untitled")
+        obj_token = node.get("obj_token")
+
+        if obj_token:
+            node_map[obj_token] = (title, path_parts.copy())
+
+        # 递归处理子节点
+        for child in node.get("children", []):
+            process_node(child, path_parts + [title])
+
+    for root_node in data.get("directory_tree", []):
+        process_node(root_node, [])
+
+    # 转换文档
+    converted_count = 0
     for doc_file in input_dir.glob("*.json"):
         try:
+            with open(doc_file, "r", encoding="utf-8") as f:
+                doc_data = json.load(f)
+
+            obj_token = doc_data.get("obj_token")
+            title = doc_data.get("title", doc_file.stem)
+
+            # 根据目录树确定输出路径
+            if obj_token and obj_token in node_map:
+                _, path_parts = node_map[obj_token]
+            else:
+                path_parts = []
+
+            # 构建输出目录
+            target_dir = output_dir
+            for part in path_parts:
+                target_dir = target_dir / get_safe_filename(part)
+
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            # 生成安全的文件名
+            output_filename = get_safe_filename(title) + ".md"
+            output_file = target_dir / output_filename
+
+            # 转换并保存
             markdown_content = convert_document_to_markdown(doc_file)
-
-            # 使用相同的基础文件名
-            output_file = output_dir / f"{doc_file.stem}.md"
-
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(markdown_content)
 
-            print(f"✓ Converted: {doc_file.name} -> {output_file.name}")
+            rel_path = output_file.relative_to(output_dir)
+            print(f"✓ {title} -> {rel_path}")
+            converted_count += 1
 
         except Exception as e:
             print(f"✗ Failed to convert {doc_file.name}: {e}")
+
+    print(f"\nTotal: {converted_count} documents converted")
 
 
 def generate_yaml_from_json(json_file: Path, yaml_file: Path) -> None:
@@ -238,25 +296,25 @@ def generate_yaml_from_json(json_file: Path, yaml_file: Path) -> None:
         json_file: JSON 目录结构文件
         yaml_file: 输出 YAML 文件
     """
-    with open(json_file, 'r', encoding='utf-8') as f:
+    with open(json_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     def tree_to_yaml(nodes, indent=0):
         result = []
         for node in nodes:
-            prefix = '  ' * indent + '- '
-            result.append(prefix + node['title'])
-            if node.get('children'):
-                result.extend(tree_to_yaml(node['children'], indent + 1))
+            prefix = "  " * indent + "- "
+            result.append(prefix + node["title"])
+            if node.get("children"):
+                result.extend(tree_to_yaml(node["children"], indent + 1))
         return result
 
-    lines = ['# 飞书知识库目录结构']
-    lines.append(f'# 空间 ID: {data["space_id"]}')
-    lines.append('')
-    lines.extend(tree_to_yaml(data['directory_tree']))
+    lines = ["# 飞书知识库目录结构"]
+    lines.append(f"# 空间 ID: {data['space_id']}")
+    lines.append("")
+    lines.extend(tree_to_yaml(data["directory_tree"]))
 
-    with open(yaml_file, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(lines))
+    with open(yaml_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
 
     print(f"✓ Generated: {yaml_file.name}")
 
@@ -268,35 +326,39 @@ def generate_jupyterbook_toc(json_file: Path, toc_file: Path) -> None:
         json_file: JSON 目录结构文件
         toc_file: 输出 _toc.yml 文件
     """
-    with open(json_file, 'r', encoding='utf-8') as f:
+    with open(json_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     def get_safe_filename(title: str) -> str:
         """生成安全的文件名"""
         # 移除或替换特殊字符，保留中文、字母、数字和基本符号
-        safe = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_', '：', '、', '，', '。')).strip()
+        safe = "".join(
+            c
+            for c in title
+            if c.isalnum() or c in (" ", "-", "_", "：", "、", "，", "。")
+        ).strip()
         return safe if safe else "unnamed"
 
     def node_to_toc(node: Dict[str, Any]) -> dict:
         """将飞书节点转换为 JupyterBook TOC 条目"""
-        safe_filename = get_safe_filename(node['title'])
-        toc_entry = {'file': safe_filename}
+        safe_filename = get_safe_filename(node["title"])
+        toc_entry = {"file": safe_filename}
 
-        if node.get('children') and len(node['children']) > 0:
+        if node.get("children") and len(node["children"]) > 0:
             # 如果有子节点，使用 chapters
-            toc_entry['chapters'] = [node_to_toc(child) for child in node['children']]
+            toc_entry["chapters"] = [node_to_toc(child) for child in node["children"]]
 
         return toc_entry
 
     # 生成 JupyterBook TOC
     toc_structure = []
 
-    for node in data['directory_tree']:
+    for node in data["directory_tree"]:
         # 判断是否应该作为 part（有多个子节点）
-        if node.get('children') and len(node['children']) > 1:
+        if node.get("children") and len(node["children"]) > 1:
             part_entry = {
-                'part': node['title'],
-                'chapters': [node_to_toc(child) for child in node['children']]
+                "part": node["title"],
+                "chapters": [node_to_toc(child) for child in node["children"]],
             }
             toc_structure.append(part_entry)
         else:
@@ -305,28 +367,28 @@ def generate_jupyterbook_toc(json_file: Path, toc_file: Path) -> None:
 
     # 生成 YAML
     lines = [
-        '# JupyterBook 目录结构',
-        '# 此文件由飞书文档自动生成',
-        '# 空间 ID: ' + data['space_id'],
-        ''
+        "# JupyterBook 目录结构",
+        "# 此文件由飞书文档自动生成",
+        "# 空间 ID: " + data["space_id"],
+        "",
     ]
 
     def toc_to_yaml(entries, indent=0):
         """将 TOC 结构转换为 YAML 格式"""
         result = []
         for entry in entries:
-            prefix = '  ' * indent
+            prefix = "  " * indent
 
-            if 'part' in entry:
+            if "part" in entry:
                 # Part 结构
                 result.append(f"{prefix}- part: {entry['part']}")
                 result.append(f"{prefix}  chapters:")
-                result.extend(toc_to_yaml(entry['chapters'], indent + 2))
-            elif 'chapters' in entry:
+                result.extend(toc_to_yaml(entry["chapters"], indent + 2))
+            elif "chapters" in entry:
                 # 有子章节的文件
                 result.append(f"{prefix}- file: {entry['file']}")
                 result.append(f"{prefix}  chapters:")
-                result.extend(toc_to_yaml(entry['chapters'], indent + 2))
+                result.extend(toc_to_yaml(entry["chapters"], indent + 2))
             else:
                 # 普通文件
                 result.append(f"{prefix}- file: {entry['file']}")
@@ -335,8 +397,8 @@ def generate_jupyterbook_toc(json_file: Path, toc_file: Path) -> None:
 
     lines.extend(toc_to_yaml(toc_structure))
 
-    with open(toc_file, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(lines))
+    with open(toc_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
 
     print(f"✓ Generated: {toc_file.name} ({len(toc_structure)} entries)")
 
@@ -344,38 +406,38 @@ def generate_jupyterbook_toc(json_file: Path, toc_file: Path) -> None:
 def main():
     """主函数"""
     # 设置路径
-    script_dir = Path(__file__).parent.parent
-    storage_dir = script_dir / "data" / "storage"
-    feishu_dir = storage_dir / "feishu" / "documents"
-    jupyterbook_dir = storage_dir / "jupyterbook"
-    directory_json = storage_dir / "jupyterbook" / "feishu_wiki_directory.json"
-    directory_yaml = storage_dir / "jupyterbook" / "feishu_wiki_directory.yaml"
-    jupyterbook_toc = storage_dir / "jupyterbook" / "_toc.yml"
+    script_dir = Path(__file__).parent.parent.parent
+    data_dir = script_dir / "data"
+    feishu_dir = data_dir / "feishu" / "documents"
+    fiction_dir = data_dir / "docs" / "fiction"
+    directory_json = feishu_dir.parent / "feishu_wiki_directory.json"
+    directory_yaml = fiction_dir / "feishu_wiki_directory.yaml"
+    fiction_toc = fiction_dir / "_toc.yml"
 
     print(f"Input directory: {feishu_dir}")
-    print(f"Output directory: {jupyterbook_dir}\n")
+    print(f"Output directory: {fiction_dir}\n")
 
     if not feishu_dir.exists():
         print(f"ERROR: Input directory does not exist: {feishu_dir}")
         exit(1)
 
-    print("Converting Feishu documents to JupyterBook Markdown format...\n")
+    print("Converting Feishu documents to Markdown format...\n")
 
-    # 转换文档
-    convert_directory(feishu_dir, jupyterbook_dir)
+    # 转换文档（保留目录结构）
+    convert_directory_with_tree(feishu_dir, fiction_dir, directory_json)
 
     # 生成 YAML 目录
     if directory_json.exists():
         generate_yaml_from_json(directory_json, directory_yaml)
 
-    # 生成 JupyterBook _toc.yml
+    # 生成 _toc.yml
     if directory_json.exists():
-        generate_jupyterbook_toc(directory_json, jupyterbook_toc)
+        generate_jupyterbook_toc(directory_json, fiction_toc)
 
     print(f"\n✓ Conversion completed!")
-    print(f"✓ Markdown files saved to: {jupyterbook_dir}")
+    print(f"✓ Markdown files saved to: {fiction_dir}")
     print(f"✓ Directory structure (YAML): {directory_yaml}")
-    print(f"✓ JupyterBook TOC: {jupyterbook_toc}")
+    print(f"✓ TOC: {fiction_toc}")
 
 
 if __name__ == "__main__":

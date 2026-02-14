@@ -7,7 +7,7 @@ from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 
-from examples.knowl.config import settings
+from src.thera.config import settings
 
 
 # Graphiti配置
@@ -20,7 +20,7 @@ graph_driver = Neo4jDriver(
 llm_config = LLMConfig(
     api_key=settings.llm_api_key,
     base_url=settings.llm_base_url,
-    model=settings.llm_model,       
+    model=settings.llm_model,
 )
 embedder_config = OpenAIEmbedderConfig(
     api_key=settings.llm_api_key,
@@ -40,6 +40,7 @@ graphiti = Graphiti(
     embedder=OpenAIEmbedder(config=embedder_config),
     cross_encoder=OpenAIRerankerClient(config=reranker_config),
 )
+
 
 async def test_graphiti():
     await graphiti.add_episode(

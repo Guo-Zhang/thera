@@ -34,7 +34,7 @@ from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
 # 加载 .env 文件
-env_path = Path(__file__).parent.parent / '.env'
+env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(env_path)
 
 from lark_oapi.api.wiki.v2 import (
@@ -53,27 +53,31 @@ space_id = os.getenv("FEISHU_EXAMPLE_SPACE_ID")
 # === input params end
 
 # === storage directories start
-SCRIPT_DIR = Path(__file__).parent.parent
-STORAGE_DIR = SCRIPT_DIR / "data" / "storage"
-FEISHU_DIR = STORAGE_DIR / "feishu"
-JUPYTERBOOK_DIR = STORAGE_DIR / "jupyterbook"
+SCRIPT_DIR = Path(__file__).parent.parent.parent
+DATA_DIR = SCRIPT_DIR / "data"
+FEISHU_DIR = DATA_DIR / "feishu"
+JUPYTERBOOK_DIR = DATA_DIR / "docs" / "fiction"
 
 # 创建所有需要的目录
 FEISHU_DIR.mkdir(parents=True, exist_ok=True)
 JUPYTERBOOK_DIR.mkdir(parents=True, exist_ok=True)
 # === storage directories end
 
+
 # 创建 lark 客户端
 def create_client() -> lark.Client:
     """创建飞书 API 客户端
-    
+
     SDK 会自动管理 token 的获取、缓存和刷新
     """
-    return lark.Client.builder() \
-        .app_id(app_id) \
-        .app_secret(app_secret) \
-        .log_level(lark.LogLevel.INFO) \
+    return (
+        lark.Client.builder()
+        .app_id(app_id)
+        .app_secret(app_secret)
+        .log_level(lark.LogLevel.INFO)
         .build()
+    )
+
 
 def save_data_to_storage(subdir: str, filename: str, data: Any) -> None:
     """将数据保存到 data/storage 的指定子目录
@@ -84,28 +88,30 @@ def save_data_to_storage(subdir: str, filename: str, data: Any) -> None:
         data: 要保存的数据
     """
     try:
-        target_dir = STORAGE_DIR / subdir
+        target_dir = FEISHU_DIR
         filepath = target_dir / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         print(f"Data saved to {filepath}")
     except Exception as e:
         print(f"Warning: Failed to save data to storage: {e}", file=sys.stderr)
+
 
 def style_to_dict(style) -> dict:
     """将 style 对象转换为可序列化的字典"""
     if style is None:
         return None
     return {
-        "bold": getattr(style, 'bold', False),
-        "italic": getattr(style, 'italic', False),
-        "strikethrough": getattr(style, 'strikethrough', False),
-        "underline": getattr(style, 'underline', False),
-        "inline_code": getattr(style, 'inline_code', False),
-        "link": getattr(style, 'link', None),
+        "bold": getattr(style, "bold", False),
+        "italic": getattr(style, "italic", False),
+        "strikethrough": getattr(style, "strikethrough", False),
+        "underline": getattr(style, "underline", False),
+        "inline_code": getattr(style, "inline_code", False),
+        "link": getattr(style, "link", None),
     }
+
 
 def block_to_dict(block) -> dict:
     """将 block 对象转换为字典
@@ -119,27 +125,28 @@ def block_to_dict(block) -> dict:
     data = {
         "block_id": block.block_id,
         "block_type": block.block_type,
-        "parent_id": block.parent_id if hasattr(block, 'parent_id') else None,
-        "children": block.children if hasattr(block, 'children') else None,
+        "parent_id": block.parent_id if hasattr(block, "parent_id") else None,
+        "children": block.children if hasattr(block, "children") else None,
     }
 
     # 添加 block 类型特定的内容
     if block.text is not None:
         data["text"] = {
-            "style": style_to_dict(getattr(block.text, 'style', None)),
-            "elements": []
+            "style": style_to_dict(getattr(block.text, "style", None)),
+            "elements": [],
         }
-        if hasattr(block.text, 'elements') and block.text.elements:
+        if hasattr(block.text, "elements") and block.text.elements:
             for elem in block.text.elements:
-                elem_data = {"type": elem.type if hasattr(elem, 'type') else None}
-                if hasattr(elem, 'text_run'):
+                elem_data = {"type": elem.type if hasattr(elem, "type") else None}
+                if hasattr(elem, "text_run"):
                     elem_data["text_run"] = {
-                        "content": getattr(elem.text_run, 'content', None),
-                        "style": style_to_dict(getattr(elem.text_run, 'style', None)),
+                        "content": getattr(elem.text_run, "content", None),
+                        "style": style_to_dict(getattr(elem.text_run, "style", None)),
                     }
                 data["text"]["elements"].append(elem_data)
 
     return data
+
 
 def save_document_content(obj_token: str, title: str, client: lark.Client) -> None:
     """获取并保存文档内容（包含完整的 block 内容）
@@ -155,9 +162,9 @@ def save_document_content(obj_token: str, title: str, client: lark.Client) -> No
         block_dict = {}  # block_id -> block data
 
         while True:
-            request = ListDocumentBlockRequest.builder() \
-                .document_id(obj_token) \
-                .page_size(100)
+            request = (
+                ListDocumentBlockRequest.builder().document_id(obj_token).page_size(100)
+            )
 
             if page_token:
                 request.page_token(page_token)
@@ -167,7 +174,10 @@ def save_document_content(obj_token: str, title: str, client: lark.Client) -> No
             response = client.docx.v1.document_block.list(request)
 
             if not response.success():
-                print(f"Warning: Failed to fetch document blocks for '{title}': {response.code} {response.msg}", file=sys.stderr)
+                print(
+                    f"Warning: Failed to fetch document blocks for '{title}': {response.code} {response.msg}",
+                    file=sys.stderr,
+                )
                 return
 
             if response.data and response.data.items:
@@ -183,21 +193,19 @@ def save_document_content(obj_token: str, title: str, client: lark.Client) -> No
         blocks_list = list(block_dict.values())
 
         # 保存完整文档数据
-        doc_data = {
-            "title": title,
-            "obj_token": obj_token,
-            "blocks": blocks_list
-        }
+        doc_data = {"title": title, "obj_token": obj_token, "blocks": blocks_list}
 
         # 使用安全的文件名
-        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_title = "".join(
+            c for c in title if c.isalnum() or c in (" ", "-", "_")
+        ).strip()
         if not safe_title:
             safe_title = f"doc_{obj_token}"
 
         # 保存到飞书原始格式目录
         filepath = FEISHU_DIR / "documents" / f"{safe_title}.json"
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(doc_data, f, indent=2, ensure_ascii=False)
 
         print(f"  Saved: {title} ({len(blocks_list)} blocks)")
@@ -205,14 +213,16 @@ def save_document_content(obj_token: str, title: str, client: lark.Client) -> No
     except Exception as e:
         print(f"Warning: Failed to save document '{title}': {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
+
 
 def list_space_nodes(
     client: lark.Client,
     space_id: str,
     parent_node_token: Optional[str] = None,
     page_token: Optional[str] = None,
-    page_size: int = 50
+    page_size: int = 50,
 ):
     """获取知识空间子节点列表
 
@@ -226,9 +236,7 @@ def list_space_nodes(
     Returns:
         API 响应数据
     """
-    request = ListSpaceNodeRequest.builder() \
-        .space_id(space_id) \
-        .page_size(page_size)
+    request = ListSpaceNodeRequest.builder().space_id(space_id).page_size(page_size)
 
     if parent_node_token:
         request.parent_node_token(parent_node_token)
@@ -240,15 +248,16 @@ def list_space_nodes(
     response = client.wiki.v2.space_node.list(request)
 
     if not response.success():
-        print(f"ERROR: 获取知识空间子节点列表失败: {response.code} {response.msg}", file=sys.stderr)
+        print(
+            f"ERROR: 获取知识空间子节点列表失败: {response.code} {response.msg}",
+            file=sys.stderr,
+        )
         raise Exception(f"failed to get space nodes: {response.code} {response.msg}")
 
     return response.data
 
-def get_node_detail(
-    client: lark.Client, 
-    node_token: str
-):
+
+def get_node_detail(client: lark.Client, node_token: str):
     """获取节点详细信息
 
     Args:
@@ -261,11 +270,12 @@ def get_node_detail(
     # 暂未实现，可按需添加
     pass
 
+
 def build_directory_tree(
     client: lark.Client,
     space_id: str,
     parent_node_token: Optional[str] = None,
-    save_docs: bool = True
+    save_docs: bool = True,
 ) -> List[Dict[str, Any]]:
     """递归构建知识库目录树结构
 
@@ -294,7 +304,7 @@ def build_directory_tree(
                     "title": item.title,
                     "has_child": item.has_child or False,
                     "node_create_time": item.node_create_time,
-                    "children": []
+                    "children": [],
                 }
 
                 # 保存文档内容（仅针对 docx 类型）
@@ -304,10 +314,7 @@ def build_directory_tree(
                 # 如果有子节点，递归获取
                 if item.has_child:
                     node_info["children"] = build_directory_tree(
-                        client,
-                        space_id,
-                        item.node_token,
-                        save_docs
+                        client, space_id, item.node_token, save_docs
                     )
 
                 nodes.append(node_info)
@@ -320,6 +327,7 @@ def build_directory_tree(
 
     return nodes
 
+
 def main():
     """主函数"""
     # 验证必要参数
@@ -327,17 +335,22 @@ def main():
         print("ERROR: FEISHU_APP_ID environment variable is required", file=sys.stderr)
         exit(1)
     if not app_secret:
-        print("ERROR: FEISHU_APP_SECRET environment variable is required", file=sys.stderr)
+        print(
+            "ERROR: FEISHU_APP_SECRET environment variable is required", file=sys.stderr
+        )
         exit(1)
     if not space_id:
-        print("ERROR: FEISHU_EXAMPLE_SPACE_ID environment variable is required", file=sys.stderr)
+        print(
+            "ERROR: FEISHU_EXAMPLE_SPACE_ID environment variable is required",
+            file=sys.stderr,
+        )
         exit(1)
 
     print(f"Using APP_ID: {app_id}")
     print(f"Using SPACE_ID: {space_id}")
-    print(f"Storage directory: {STORAGE_DIR}")
+    print(f"Data directory: {DATA_DIR}")
     print(f"  - Feishu format: {FEISHU_DIR}")
-    print(f"  - JupyterBook format: {JUPYTERBOOK_DIR}\n")
+    print(f"  - Fiction directory: {JUPYTERBOOK_DIR}\n")
 
     # 创建客户端（SDK 自动处理认证）
     client = create_client()
@@ -353,25 +366,35 @@ def main():
             "space_id": space_id,
             "directory_tree": directory_tree,
             "total_nodes": len(directory_tree),
-            "generated_time": time.strftime("%Y-%m-%d %H:%M:%S")
+            "generated_time": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
         print("\n=== Directory Tree Structure ===")
         print(json.dumps(output_data, indent=2, ensure_ascii=False))
 
-        # 保存目录结构到两个子目录
-        save_data_to_storage("feishu", "feishu_wiki_directory.json", output_data)
-        save_data_to_storage("jupyterbook", "feishu_wiki_directory.json", output_data)
+        # 保存目录结构文件
+        feishu_dir_file = FEISHU_DIR / "feishu_wiki_directory.json"
+        feishu_dir_file.write_text(
+            json.dumps(output_data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
-        print(f"\n✓ Directory saved to: {FEISHU_DIR}/feishu_wiki_directory.json")
-        print(f"✓ Directory saved to: {JUPYTERBOOK_DIR}/feishu_wiki_directory.json")
+        fiction_dir_file = JUPYTERBOOK_DIR / "feishu_wiki_directory.json"
+        fiction_dir_file.parent.mkdir(parents=True, exist_ok=True)
+        fiction_dir_file.write_text(
+            json.dumps(output_data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        print(f"\n✓ Directory saved to: {feishu_dir_file}")
+        print(f"✓ Directory saved to: {fiction_dir_file}")
         print(f"✓ Documents saved to: {FEISHU_DIR}/documents/")
 
     except Exception as e:
         print(f"ERROR: building directory tree failed: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         exit(1)
+
 
 if __name__ == "__main__":
     main()

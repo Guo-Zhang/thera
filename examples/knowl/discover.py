@@ -1,10 +1,9 @@
 """
 目标：从人工挑选个别文章到自主发现新知识。
 输入：
-- 路径：项目根目录 `data/docs`的 article1-10
+- 路径：项目根目录 `data/docs/fiction`
 - 内容：从近期文章中选取代表性文本作为原始素材。
-- 格式：知识是文本格式，文本长度约 1000-2000 字左右，即 iGuo 说公众号文本长度。暂不处理多模态、对话级短文本或者书籍级超长文本、专注于文章级文本。
-输出：
+- 格式：知识是文本格式，文本长度约 1000字左右。
 - 内容：
     1. 不同维度的文本相似度。
     2. 基于文本相似度的知识发现结果。
@@ -12,42 +11,83 @@
 算法：
 1. 不同方法计算文本相似度。
 2. 使用 Kimi或者智谱解析得到知识发现报告。
+3. 自动识别和分类提纲与初稿文本。
 """
 
 import json
 import re
 from collections import defaultdict
 from pathlib import Path
+from enum import Enum
 
 import numpy as np
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from examples.knowl.config import settings
+from src.thera.config import settings
 
-DOCS_DIR = Path("data/docs")
+DOCS_DIR = Path("data/docs/fiction")
 KNOWL_DIR = Path("data/knowl")
 
 
-def load_articles(docs_dir: Path = DOCS_DIR) -> dict[str, dict]:
-    """加载 docs 目录下的所有文章"""
+class DocType(Enum):
+    OUTLINE = "提纲"  # 提纲类
+    DRAFT = "初稿"  # 初稿类
+    OTHER = "其他"
+
+
+def classify_doc_type(file_path: Path) -> DocType:
+    """根据文件路径自动识别文档类型（提纲/初稿）"""
+    path_str = str(file_path)
+
+    if "/提纲/" in path_str or path_str.endswith("/提纲.md"):
+        return DocType.OUTLINE
+    elif "/初稿/" in path_str or path_str.endswith("/初稿.md"):
+        return DocType.DRAFT
+    else:
+        return DocType.OTHER
+
+
+def load_articles(docs_dir: Path = DOCS_DIR) -> tuple[dict[str, dict], dict]:
+    """加载 docs/fiction 目录下的所有文章，并自动分类"""
     articles = {}
-    for f in sorted(docs_dir.glob("article*.md")):
+    doc_types = {DocType.OUTLINE: [], DocType.DRAFT: [], DocType.OTHER: []}
+
+    for f in sorted(docs_dir.glob("**/*.md")):
+        if f.name.startswith("_") or f.name in [
+            "feishu_wiki_directory.json",
+            "feishu_wiki_directory.yaml",
+        ]:
+            continue
         content = f.read_text(encoding="utf-8")
         title = content.split("\n")[0].strip("# ").strip()
-        articles[f.stem] = {"title": title, "content": content}
-    return articles
+        doc_type = classify_doc_type(f)
+
+        articles[f.stem] = {
+            "title": title,
+            "content": content,
+            "doc_type": doc_type,
+            "path": str(f.relative_to(docs_dir)),
+        }
+        doc_types[doc_type].append(f.stem)
+
+    return articles, doc_types
 
 
-def get_embeddings(texts: list[str]) -> np.ndarray:
-    """使用 LLM 获取文本 embedding"""
+def get_embeddings(texts: list[str], batch_size: int = 10) -> np.ndarray:
+    """使用 LLM 获取文本 embedding，分批处理"""
     client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
 
-    response = client.embeddings.create(model=settings.llm_embedding_model, input=texts)
+    all_embeddings = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        response = client.embeddings.create(
+            model=settings.llm_embedding_model, input=batch
+        )
+        all_embeddings.extend([d.embedding for d in response.data])
 
-    embeddings = np.array([d.embedding for d in response.data])
-    return embeddings
+    return np.array(all_embeddings)
 
 
 def embedding_similarity(embeddings: np.ndarray) -> np.ndarray:
@@ -184,8 +224,10 @@ def build_similarity_report(sim_results: dict) -> str:
     return "\n".join(report_lines)
 
 
-def discover_with_llm(articles: dict[str, dict], sim_results: dict) -> str:
-    """使用 LLM 进行知识发现 - 基于相似度矩阵"""
+def discover_with_llm(
+    articles: dict[str, dict], sim_results: dict, doc_types: dict
+) -> str:
+    """使用 LLM 进行知识发现 - 基于相似度矩阵，自动区分提纲和初稿"""
     client = OpenAI(
         api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=180.0
     )
@@ -193,70 +235,137 @@ def discover_with_llm(articles: dict[str, dict], sim_results: dict) -> str:
     names = sim_results["names"]
     sims = sim_results["similarities"]
 
-    sim_summary_lines = []
-    for method in ["embedding", "tfidf", "keyword", "jaccard"]:
-        if method not in sims:
-            continue
+    outline_names = [n for n in names if articles[n]["doc_type"] == DocType.OUTLINE]
+    draft_names = [n for n in names if articles[n]["doc_type"] == DocType.DRAFT]
+
+    def get_sim_summary(name_list: list[str], sim_matrix: np.ndarray) -> str:
+        """获取某类文档的相似度排名"""
+        if len(name_list) < 2:
+            return "（文档数量不足）"
+
+        name_to_idx = {n: i for i, n in enumerate(names)}
         pairs = []
-        n = len(names)
-        for i in range(n):
-            for j in range(i + 1, n):
-                pairs.append((names[i], names[j], sims[method][i][j]))
+        for i, a in enumerate(name_list):
+            for b in name_list[i + 1 :]:
+                a_idx = name_to_idx[a]
+                b_idx = name_to_idx[b]
+                pairs.append((a, b, sim_matrix[a_idx][b_idx]))
+
         pairs.sort(key=lambda x: x[2], reverse=True)
+        return "\n".join(
+            [
+                f"  {rank}. {a} ↔ {b}: {s:.4f}"
+                for rank, (a, b, s) in enumerate(pairs[:5], 1)
+            ]
+        )
 
-        sim_summary_lines.append(f"\n### {method.upper()} 相似度排名")
-        for rank, (a, b, score) in enumerate(pairs, 1):
-            sim_summary_lines.append(f"  {rank}. {a} ↔ {b}: {score:.4f}")
+    sim_summary = f"""
+## 提纲类文档（{len(outline_names)} 篇）内部相似度排名
+{get_sim_summary(outline_names, sims["embedding"])}
 
-    sim_summary = "\n".join(sim_summary_lines)
+## 初稿类文档（{len(draft_names)} 篇）内部相似度排名
+{get_sim_summary(draft_names, sims["embedding"])}
 
-    article_summaries = []
+## 提纲与初稿跨类相似度排名
+"""
+
+    if outline_names and draft_names:
+        name_to_idx = {n: i for i, n in enumerate(names)}
+        cross_pairs = []
+        for o in outline_names:
+            for d in draft_names:
+                o_idx = name_to_idx[o]
+                d_idx = name_to_idx[d]
+                cross_pairs.append((o, d, sims["embedding"][o_idx][d_idx]))
+
+        cross_pairs.sort(key=lambda x: x[2], reverse=True)
+        sim_summary += "\n".join(
+            [
+                f"  {rank}. 提纲:{a} ↔ 初稿:{b}: {s:.4f}"
+                for rank, (a, b, s) in enumerate(cross_pairs[:10], 1)
+            ]
+        )
+
+    outline_summaries = []
+    draft_summaries = []
+    other_summaries = []
+
     for name in names:
-        content = articles[name]["content"]
-        article_summaries.append(f"## {name}\n{content[:1200]}")
+        info = articles[name]
+        doc_type = info["doc_type"]
+        content = info["content"]
+        path = info.get("path", "")
 
-    prompt = f"""你是一个专业的知识分析助手，擅长从多篇文章中发现知识关联。
+        summary = f"### {info['title']}\n路径: {path}\n类型: {doc_type.value}\n\n{content[:800]}"
+
+        if doc_type == DocType.OUTLINE:
+            outline_summaries.append(summary)
+        elif doc_type == DocType.DRAFT:
+            draft_summaries.append(summary)
+        else:
+            other_summaries.append(summary)
+
+    prompt = f"""你是一个专业的故事创作知识分析助手，擅长从提纲和初稿文本中发现知识关联。
+
+## 背景
+当前分析的文本分为两类：
+- **提纲**：概念性、设定性内容，包含主题、人物、剧情、环境等设计文档
+- **初稿**：叙事性、场景化内容，包含具体的故事情节、对话、描写等
 
 ## 任务
-基于以下文章的相似度分析结果，发现知识关联和洞察。
+分析提纲与初稿之间的对应关系，发现创作中的知识关联和洞察。
 
 ## 相似度分析结果
 {sim_summary}
 
-## 文章内容
-{chr(10).join(article_summaries)}
+## 提纲类文档
+{chr(10).join(outline_summaries)}
+
+## 初稿类文档
+{chr(10).join(draft_summaries)}
 
 ## 要求
-1. 重点基于 **Embedding 语义相似度** 来分析文章间的知识关联（因为它代表语义层面的相似性）
-2. 结合 TF-IDF、关键词、字符级相似度做交叉验证
-3. 分析高相似度文章对之间的共同主题和差异
-4. 发现潜在的新知识（跨文章洞察）
-5. 提取对公司业务有价值的洞察
+1. 区分分析提纲和初稿的各自特点
+2. 找出提纲与初稿之间的对应关系（如：哪篇初稿对应哪个提纲设定）
+3. 发现提纲中的设定在初稿中是如何体现的
+4. 分析创作过程中的知识转化和演变
+5. 提炼对创作有帮助的洞察
 
 请按以下格式输出：
 ## 知识发现报告
 
-### 1. 相似度分析解读
-分析各方法的相似度结果，解释为什么某些文章对相似度高/低
+### 1. 文本分类概览
+- 提纲数量及核心主题
+- 初稿数量及主要场景
+- 两类文本的总体特点
 
-### 2. 核心主题提炼
-每篇文章的核心主题是什么
+### 2. 提纲分析
+- 各提纲的核心设定
+- 提纲之间的关联
 
-### 3. 知识关联图谱
-基于相似度构建文章间的知识关联
+### 3. 初稿分析
+- 各初稿的核心内容
+- 初稿之间的关联
 
-### 4. 新知识发现
-跨文章分析得出的新洞察
+### 4. 提纲与初稿跨类相似度分析
+基于 embedding 语义相似度，展示提纲与初稿之间的对应关系：
+- 列出相似度最高的前10对提纲-初稿组合
+- 分析这些高相似度组合的内在逻辑
 
-### 5. 业务价值洞察
-对公司有价值的发现"""
+### 5. 提纲与初稿对应关系
+- 哪些初稿体现了哪些提纲设定
+- 设定在叙事中的具体体现
+
+### 6. 创作洞察
+- 从提纲到初稿的转化过程
+- 有价值的创作经验"""
 
     response = client.chat.completions.create(
         model=settings.llm_model,
         messages=[
             {
                 "role": "system",
-                "content": "你是一个专业的知识分析助手，擅长从文本相似度分析中发现深层次的知识关联。",
+                "content": "你是一个专业的故事创作知识分析助手，擅长分析提纲（设定/概念）和初稿（叙事/场景）之间的关系。",
             },
             {"role": "user", "content": prompt},
         ],
@@ -265,12 +374,7 @@ def discover_with_llm(articles: dict[str, dict], sim_results: dict) -> str:
 
     llm_content = response.choices[0].message.content
 
-    full_report = "# 知识发现完整报告\n\n"
-    full_report += build_similarity_report(sim_results)
-    full_report += "\n\n---\n\n"
-    full_report += llm_content
-
-    return full_report
+    return llm_content
 
 
 def export_html(markdown_path: Path, html_path: Path):
@@ -329,8 +433,11 @@ def main():
     KNOWL_DIR.mkdir(parents=True, exist_ok=True)
 
     print("正在加载文章...")
-    articles = load_articles()
+    articles, doc_types = load_articles()
     print(f"已加载 {len(articles)} 篇文章")
+    print(f"  - 提纲: {len(doc_types[DocType.OUTLINE])} 篇")
+    print(f"  - 初稿: {len(doc_types[DocType.DRAFT])} 篇")
+    print(f"  - 其他: {len(doc_types[DocType.OTHER])} 篇")
 
     print("正在计算文本相似度...")
     sim_results = compute_all_similarities(articles)
@@ -341,7 +448,7 @@ def main():
     print(f"相似度报告已保存至: {sim_report_path}")
 
     print("正在进行知识发现分析...")
-    full_report = discover_with_llm(articles, sim_results)
+    full_report = discover_with_llm(articles, sim_results, doc_types)
 
     report_path = KNOWL_DIR / "knowledge_discovery.md"
     report_path.write_text(full_report, encoding="utf-8")
