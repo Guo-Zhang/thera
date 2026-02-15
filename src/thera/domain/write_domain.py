@@ -1,7 +1,11 @@
-from thera.meta import Mode, ModeType
+"""
+写作域 - Domain
+"""
+
+from thera.meta import Domain, DomainType
 
 
-class WriteDomain(Mode):
+class WriteDomain(Domain):
     name = "write"
     description = "写作域 - 小说创作、片段分析"
 
@@ -14,11 +18,11 @@ class WriteDomain(Mode):
     def handle_input(self, user_input: str) -> str:
         return f"[Write] {user_input}"
 
-    def auto_switch(self, user_input: str) -> ModeType | None:
+    def auto_switch(self, user_input: str) -> DomainType | None:
         if user_input.startswith("/think"):
-            return ModeType.THINK
+            return DomainType.THINK
         if user_input.startswith("/knowl"):
-            return ModeType.KNOWL
+            return DomainType.KNOWL
         if user_input.startswith("/chat"):
-            return ModeType.CHAT
+            return DomainType.CHAT
         return None

@@ -12,7 +12,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from thera.meta import Mode, ModeType
+from thera.meta import Domain, DomainType
 from thera.config import settings
 
 
@@ -369,7 +369,7 @@ def export_html(markdown_path: Path, html_path: Path):
     html_path.write_text(html_content, encoding="utf-8")
 
 
-class KnowlDomain(Mode):
+class KnowlDomain(Domain):
     name = "knowl"
     description = "知识工程域 - 知识图谱、RAG"
 
@@ -427,11 +427,11 @@ class KnowlDomain(Mode):
 
         return f"Knowledge discovery completed. Reports saved to {knowl_dir}"
 
-    def auto_switch(self, user_input: str) -> ModeType | None:
+    def auto_switch(self, user_input: str) -> DomainType | None:
         if user_input.startswith("/think"):
-            return ModeType.THINK
+            return DomainType.THINK
         if user_input.startswith("/write"):
-            return ModeType.WRITE
+            return DomainType.WRITE
         if user_input.startswith("/chat"):
-            return ModeType.CHAT
+            return DomainType.CHAT
         return None

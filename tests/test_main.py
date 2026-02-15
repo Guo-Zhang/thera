@@ -1,5 +1,5 @@
 """
-主模块单元测试
+主模块单元测试 - ADAS 模型
 """
 
 import sys
@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import pytest
 
 from thera.__main__ import Thera, get_app
-from thera.meta import ModeManager, Mode, ModeType, StorageManager
+from thera.meta import DomainManager, Domain, DomainType, StorageState
 
 
 class TestThera:
@@ -25,51 +25,51 @@ class TestThera:
     def test_init_creates_directories(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
-        assert (tmp_path).exists()
+        assert tmp_path.exists()
 
     def test_init_sets_up_managers(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
-        assert app._mode_manager is not None
-        assert app._storage_manager is not None
+        assert app._domain_manager is not None
+        assert app._storage is not None
 
-    def test_mode_manager_property(self, tmp_path):
+    def test_domain_manager_property(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
-        assert app.mode_manager is not None
+        assert app.domain_manager is not None
 
     def test_storage_property(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
         assert app.storage is not None
 
-    def test_switch_mode(self, tmp_path):
+    def test_switch_activity(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
-        app.switch_mode("think")
-        mode = app.mode_manager.get_current_mode()
-        assert mode is not None
-        assert mode.name == "think"
+        app.switch_activity("think")
+        activity = app.activity_manager.get_current_activity()
+        assert activity is not None
+        assert activity.name == "think"
 
-    def test_switch_mode_uninitialized(self):
+    def test_switch_activity_uninitialized(self):
         app = Thera()
         with pytest.raises(RuntimeError, match="not initialized"):
-            app.switch_mode("chat")
+            app.switch_activity("chat")
 
     def test_property_uninitialized(self):
         app = Thera()
         with pytest.raises(RuntimeError, match="not initialized"):
-            _ = app.mode_manager
+            _ = app.domain_manager
 
 
-class TestModeManager:
-    def test_register_mode(self, tmp_path):
+class TestDomainManager:
+    def test_register_domain(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
 
-        class CustomMode(Mode):
+        class CustomDomain(Domain):
             name = "custom"
-            description = "Custom mode"
+            description = "Custom domain"
 
             def handle_input(self, user_input: str) -> str:
                 return "custom"
@@ -80,56 +80,56 @@ class TestModeManager:
             def on_deactivate(self):
                 pass
 
-        app.mode_manager.register("custom", CustomMode)
-        assert "custom" in app.mode_manager._modes
+        app.domain_manager.register("custom", CustomDomain)
+        assert "custom" in app.domain_manager._domains
 
-    def test_switch_mode(self, tmp_path):
+    def test_switch_domain(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
 
-        mode = app.mode_manager.switch_mode("think")
-        assert mode.name == "think"
+        domain = app.domain_manager.switch_domain("think")
+        assert domain.name == "think"
 
-    def test_handle_input_no_mode(self):
+    def test_handle_input_no_domain(self):
         app = Thera()
         app.init()
-        app.mode_manager._current_mode = None
-        result = app.mode_manager.handle_input("hello")
-        assert "No mode selected" in result
+        app.domain_manager._current_domain = None
+        result = app.domain_manager.handle_input("hello")
+        assert "No domain selected" in result
 
-    def test_handle_input_with_mode(self, tmp_path):
+    def test_handle_input_with_domain(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
-        app.mode_manager.switch_mode("think")
-        result = app.mode_manager.handle_input("hello")
+        app.domain_manager.switch_domain("think")
+        result = app.domain_manager.handle_input("hello")
         assert "[Think] hello" in result
 
 
-class TestStorageManager:
+class TestStorageState:
     def test_ensure_dirs(self, tmp_path):
-        sm = StorageManager(tmp_path)
+        sm = StorageState(tmp_path)
         sm.ensure_dirs()
         assert sm.base_path.exists()
 
     def test_get_data_dir(self, tmp_path):
-        sm = StorageManager(tmp_path)
+        sm = StorageState(tmp_path)
         path = sm.get_data_dir("test")
         assert path == tmp_path / "test"
         assert path.exists()
 
     def test_save_and_load_json(self, tmp_path):
-        sm = StorageManager(tmp_path)
+        sm = StorageState(tmp_path)
         sm.save_json("test", "data.json", {"key": "value"})
         data = sm.load_json("test", "data.json")
         assert data == {"key": "value"}
 
     def test_load_json_nonexistent(self, tmp_path):
-        sm = StorageManager(tmp_path)
+        sm = StorageState(tmp_path)
         data = sm.load_json("test", "nonexistent.json")
         assert data is None
 
     def test_save_and_load_yaml(self, tmp_path):
-        sm = StorageManager(tmp_path)
+        sm = StorageState(tmp_path)
         sm.save_yaml("test", "data.yaml", {"key": "value"})
         data = sm.load_yaml("test", "data.yaml")
         assert data == {"key": "value"}
