@@ -1,5 +1,5 @@
 """
-文档工程模块
+文档工程模式
 
 原型：examples/docs
 用例：tests/fixtures/docs

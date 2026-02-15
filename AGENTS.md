@@ -84,3 +84,10 @@ Currently minimal - package entry points only. Main logic lives in examples.
 - `pydantic-settings`: Configuration management
 - `textual`: TUI framework
 - `lark-oapi`: Feishu/Lark API client
+
+## Data Safety Rules
+
+1. **删除前确认** - 涉及用户数据的操作（移动、删除、重命名），必须先询问用户确认
+2. **不主动删除** - 避免使用 `rm -rf` 等破坏性命令，优先用 safe delete 或先检查
+3. **操作前备份** - 重要数据操作前，先检查是否存在，必要时备份
+4. **读取为主** - 优先读取用户数据而非修改，修改前确认

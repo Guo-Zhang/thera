@@ -1,56 +1,37 @@
 """
-目标：从人工挑选个别文章到自主发现新知识。
-输入：
-- 路径：项目根目录 `data/docs/fiction`
-- 内容：从近期文章中选取代表性文本作为原始素材。
-- 格式：知识是文本格式，文本长度约 1000字左右。
-- 内容：
-    1. 不同维度的文本相似度。
-    2. 基于文本相似度的知识发现结果。
-- 路径：项目根目录 `data/knowl`
-算法：
-1. 不同方法计算文本相似度。
-2. 使用 Kimi或者智谱解析得到知识发现报告。
-3. 自动识别和分类提纲与初稿文本。
+知识工程域 - 知识图谱、RAG、知识发现
 """
 
 import json
 import re
-from collections import defaultdict
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 import numpy as np
-from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from src.thera.config import settings
-
-DOCS_DIR = Path("data/docs/fiction")
-KNOWL_DIR = Path("data/knowl")
+from thera.meta import Mode, ModeType
+from thera.config import settings
 
 
 class DocType(Enum):
-    OUTLINE = "提纲"  # 提纲类
-    DRAFT = "初稿"  # 初稿类
+    OUTLINE = "提纲"
+    DRAFT = "初稿"
     OTHER = "其他"
 
 
 def classify_doc_type(file_path: Path) -> DocType:
-    """根据文件路径自动识别文档类型（提纲/初稿）"""
     path_str = str(file_path)
-
     if "/提纲/" in path_str or path_str.endswith("/提纲.md"):
         return DocType.OUTLINE
     elif "/初稿/" in path_str or path_str.endswith("/初稿.md"):
         return DocType.DRAFT
-    else:
-        return DocType.OTHER
+    return DocType.OTHER
 
 
-def load_articles(docs_dir: Path = DOCS_DIR) -> tuple[dict[str, dict], dict]:
-    """加载 docs/fiction 目录下的所有文章，并自动分类"""
+def load_articles(docs_dir: Path) -> tuple[dict[str, dict], dict]:
     articles = {}
     doc_types = {DocType.OUTLINE: [], DocType.DRAFT: [], DocType.OTHER: []}
 
@@ -76,7 +57,8 @@ def load_articles(docs_dir: Path = DOCS_DIR) -> tuple[dict[str, dict], dict]:
 
 
 def get_embeddings(texts: list[str], batch_size: int = 10) -> np.ndarray:
-    """使用 LLM 获取文本 embedding，分批处理"""
+    from openai import OpenAI
+
     client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
 
     all_embeddings = []
@@ -91,15 +73,12 @@ def get_embeddings(texts: list[str], batch_size: int = 10) -> np.ndarray:
 
 
 def embedding_similarity(embeddings: np.ndarray) -> np.ndarray:
-    """基于 embedding 的余弦相似度"""
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
     normalized = embeddings / (norms + 1e-8)
     return np.dot(normalized, normalized.T)
 
 
 def jaccard_similarity(text1: str, text2: str) -> float:
-    """Jaccard 相似度：基于字符 n-gram"""
-
     def get_ngrams(text: str, n: int = 3) -> set:
         text = re.sub(r"\s+", "", text.lower())
         return set(text[i : i + n] for i in range(len(text) - n + 1))
@@ -116,15 +95,12 @@ def jaccard_similarity(text1: str, text2: str) -> float:
 
 
 def tfidf_similarity(texts: list[str]) -> np.ndarray:
-    """TF-IDF 余弦相似度"""
     vectorizer = TfidfVectorizer(analyzer="char", ngram_range=(2, 4), max_features=5000)
     tfidf_matrix = vectorizer.fit_transform(texts)
     return cosine_similarity(tfidf_matrix)
 
 
 def keyword_similarity(text1: str, text2: str) -> float:
-    """关键词相似度：基于词级别的 Jaccard"""
-
     def extract_keywords(text: str) -> set:
         text = re.sub(r"[^\w\u4e00-\u9fff]", " ", text)
         words = text.split()
@@ -142,7 +118,6 @@ def keyword_similarity(text1: str, text2: str) -> float:
 
 
 def compute_all_similarities(articles: dict[str, dict]) -> dict:
-    """计算所有文章对的不同维度相似度"""
     names = list(articles.keys())
     contents = [articles[n]["content"] for n in names]
 
@@ -164,7 +139,6 @@ def compute_all_similarities(articles: dict[str, dict]) -> dict:
     tfidf_sim = tfidf_similarity(contents)
     results["tfidf"] = tfidf_sim
 
-    print("正在计算 Embedding 语义相似度...")
     embeddings = get_embeddings(contents)
     embedding_sim = embedding_similarity(embeddings)
     results["embedding"] = embedding_sim
@@ -172,33 +146,23 @@ def compute_all_similarities(articles: dict[str, dict]) -> dict:
     return {"names": names, "similarities": results}
 
 
-def format_similarity_matrix(
-    names: list[str], sim_matrix: np.ndarray, method: str
-) -> str:
-    """格式化相似度矩阵为可读字符串"""
-    lines = [f"\n### {method}\n"]
-    header = "".join([f"{n:>12}" for n in names])
-    lines.append(f"{'':>12}{header}")
-    lines.append("-" * (12 * len(names) + 12))
-
-    for i, name in enumerate(names):
-        row = "".join([f"{sim_matrix[i][j]:>12.4f}" for j in range(len(names))])
-        lines.append(f"{name:>12}{row}")
-
-    return "\n".join(lines)
-
-
 def build_similarity_report(sim_results: dict) -> str:
-    """生成相似度分析报告"""
     names = sim_results["names"]
     sims = sim_results["similarities"]
 
-    report_lines = ["# 文本相似度分析报告\n"]
-    report_lines.append("## 1. 相似度矩阵\n")
+    report_lines = ["# 文本相似度分析报告\n", "## 1. 相似度矩阵\n"]
 
     for method in ["jaccard", "keyword", "tfidf", "embedding"]:
         if method in sims:
-            report_lines.append(format_similarity_matrix(names, sims[method], method))
+            sim_matrix = sims[method]
+            report_lines.append(f"\n### {method}\n")
+            header = "".join([f"{n:>12}" for n in names])
+            report_lines.append(f"{'':>12}{header}")
+            report_lines.append("-" * (12 * len(names) + 12))
+
+            for i, name in enumerate(names):
+                row = "".join([f"{sim_matrix[i][j]:>12.4f}" for j in range(len(names))])
+                report_lines.append(f"{name:>12}{row}")
 
     report_lines.append("\n## 2. 方法说明\n")
     report_lines.append("- **Jaccard**: 基于3-gram字符集合的交集/并集")
@@ -227,7 +191,8 @@ def build_similarity_report(sim_results: dict) -> str:
 def discover_with_llm(
     articles: dict[str, dict], sim_results: dict, doc_types: dict
 ) -> str:
-    """使用 LLM 进行知识发现 - 基于相似度矩阵，自动区分提纲和初稿"""
+    from openai import OpenAI
+
     client = OpenAI(
         api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=180.0
     )
@@ -239,7 +204,6 @@ def discover_with_llm(
     draft_names = [n for n in names if articles[n]["doc_type"] == DocType.DRAFT]
 
     def get_sim_summary(name_list: list[str], sim_matrix: np.ndarray) -> str:
-        """获取某类文档的相似度排名"""
         if len(name_list) < 2:
             return "（文档数量不足）"
 
@@ -326,7 +290,7 @@ def discover_with_llm(
 
 ## 要求
 1. 区分分析提纲和初稿的各自特点
-2. 找出提纲与初稿之间的对应关系（如：哪篇初稿对应哪个提纲设定）
+2. 找出提纲与初稿之间的对应关系
 3. 发现提纲中的设定在初稿中是如何体现的
 4. 分析创作过程中的知识转化和演变
 5. 提炼对创作有帮助的洞察
@@ -335,50 +299,28 @@ def discover_with_llm(
 ## 知识发现报告
 
 ### 1. 文本分类概览
-- 提纲数量及核心主题
-- 初稿数量及主要场景
-- 两类文本的总体特点
-
 ### 2. 提纲分析
-- 各提纲的核心设定
-- 提纲之间的关联
-
 ### 3. 初稿分析
-- 各初稿的核心内容
-- 初稿之间的关联
-
 ### 4. 提纲与初稿跨类相似度分析
-基于 embedding 语义相似度，展示提纲与初稿之间的对应关系：
-- 列出相似度最高的前10对提纲-初稿组合
-- 分析这些高相似度组合的内在逻辑
-
 ### 5. 提纲与初稿对应关系
-- 哪些初稿体现了哪些提纲设定
-- 设定在叙事中的具体体现
-
-### 6. 创作洞察
-- 从提纲到初稿的转化过程
-- 有价值的创作经验"""
+### 6. 创作洞察"""
 
     response = client.chat.completions.create(
         model=settings.llm_model,
         messages=[
             {
                 "role": "system",
-                "content": "你是一个专业的故事创作知识分析助手，擅长分析提纲（设定/概念）和初稿（叙事/场景）之间的关系。",
+                "content": "你是一个专业的故事创作知识分析助手，擅长分析提纲和初稿之间的关系。",
             },
             {"role": "user", "content": prompt},
         ],
         temperature=0.7,
     )
 
-    llm_content = response.choices[0].message.content
-
-    return llm_content
+    return response.choices[0].message.content
 
 
 def export_html(markdown_path: Path, html_path: Path):
-    """将 Markdown 转换为可打印的 HTML"""
     markdown_content = markdown_path.read_text(encoding="utf-8")
 
     markdown_content = markdown_content.replace("```mermaid", "<pre><code>").replace(
@@ -425,51 +367,71 @@ def export_html(markdown_path: Path, html_path: Path):
 </html>"""
 
     html_path.write_text(html_content, encoding="utf-8")
-    print(f"HTML 已导出至: {html_path}")
-    print("提示: 在浏览器中打开 HTML 文件，使用 Cmd+P 打印为 PDF")
 
 
-def main():
-    KNOWL_DIR.mkdir(parents=True, exist_ok=True)
+class KnowlDomain(Mode):
+    name = "knowl"
+    description = "知识工程域 - 知识图谱、RAG"
 
-    print("正在加载文章...")
-    articles, doc_types = load_articles()
-    print(f"已加载 {len(articles)} 篇文章")
-    print(f"  - 提纲: {len(doc_types[DocType.OUTLINE])} 篇")
-    print(f"  - 初稿: {len(doc_types[DocType.DRAFT])} 篇")
-    print(f"  - 其他: {len(doc_types[DocType.OTHER])} 篇")
+    def __init__(self, app):
+        super().__init__(app)
+        self.articles = {}
+        self.sim_results = {}
 
-    print("正在计算文本相似度...")
-    sim_results = compute_all_similarities(articles)
+    def on_activate(self):
+        print(f"Activated: {self.name}")
 
-    sim_report_path = KNOWL_DIR / "similarity_report.md"
-    sim_report = build_similarity_report(sim_results)
-    sim_report_path.write_text(sim_report, encoding="utf-8")
-    print(f"相似度报告已保存至: {sim_report_path}")
+    def on_deactivate(self):
+        print(f"Deactivated: {self.name}")
 
-    print("正在进行知识发现分析...")
-    full_report = discover_with_llm(articles, sim_results, doc_types)
+    def handle_input(self, user_input: str) -> str:
+        if user_input.startswith("/discover"):
+            return self._run_discovery()
+        return f"[Knowl] {user_input}"
 
-    report_path = KNOWL_DIR / "knowledge_discovery.md"
-    report_path.write_text(full_report, encoding="utf-8")
-    print(f"知识发现报告已保存至: {report_path}")
+    def _run_discovery(self) -> str:
+        docs_dir = self.app.storage.base_path / "docs" / "fiction"
+        knowl_dir = self.app.storage.base_path / "knowl"
 
-    pdf_path = KNOWL_DIR / "knowledge_discovery.html"
-    export_html(report_path, pdf_path)
+        if not docs_dir.exists():
+            return f"Directory not found: {docs_dir}"
 
-    sim_json_path = KNOWL_DIR / "similarity_data.json"
-    json_data = {
-        "names": sim_results["names"],
-        "similarities": {
-            k: v.tolist() if isinstance(v, np.ndarray) else v.tolist()
-            for k, v in sim_results["similarities"].items()
-        },
-    }
-    sim_json_path.write_text(
-        json.dumps(json_data, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    print(f"相似度数据已保存至: {sim_json_path}")
+        knowl_dir.mkdir(parents=True, exist_ok=True)
 
+        articles, doc_types = load_articles(docs_dir)
+        if not articles:
+            return f"No articles found in {docs_dir}"
 
-if __name__ == "__main__":
-    main()
+        self.sim_results = compute_all_similarities(articles)
+
+        sim_report = build_similarity_report(self.sim_results)
+        (knowl_dir / "similarity_report.md").write_text(sim_report, encoding="utf-8")
+
+        full_report = discover_with_llm(articles, self.sim_results, doc_types)
+        (knowl_dir / "knowledge_discovery.md").write_text(full_report, encoding="utf-8")
+
+        export_html(
+            knowl_dir / "knowledge_discovery.md", knowl_dir / "knowledge_discovery.html"
+        )
+
+        sim_json = {
+            "names": self.sim_results["names"],
+            "similarities": {
+                k: v.tolist() if isinstance(v, np.ndarray) else v
+                for k, v in self.sim_results["similarities"].items()
+            },
+        }
+        (knowl_dir / "similarity_data.json").write_text(
+            json.dumps(sim_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        return f"Knowledge discovery completed. Reports saved to {knowl_dir}"
+
+    def auto_switch(self, user_input: str) -> ModeType | None:
+        if user_input.startswith("/think"):
+            return ModeType.THINK
+        if user_input.startswith("/write"):
+            return ModeType.WRITE
+        if user_input.startswith("/chat"):
+            return ModeType.CHAT
+        return None
