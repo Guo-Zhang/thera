@@ -617,6 +617,10 @@ def run_memo_activity(
     print(f"生成 {len(card_results)} 张知识卡片")
     print(f"意图分布: {intent_counts}")
 
+    generate_reasoning_report(
+        client, notes, cluster_results, cross_links, card_results, output_dir
+    )
+
     print("生成内容介绍...")
     content_intro = summarize_content(client, notes)
 
@@ -824,6 +828,190 @@ def batch_classify_notes(
             }
         )
     return results
+
+
+def analyze_development_direction(
+    client: OpenAI,
+    notes: list[dict[str, Any]],
+    clusters: list[dict[str, Any]],
+    cross_links: list[dict[str, Any]],
+    card_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """分析编程开发方向"""
+
+    dev_related_notes = []
+    for note in notes:
+        title = note.get("title", "").lower()
+        body = note.get("body", "").lower()
+        keywords = [
+            "编程",
+            "代码",
+            "软件",
+            "开发",
+            "系统",
+            "架构",
+            "api",
+            "算法",
+            "模型",
+            "ai",
+            "llm",
+            "agent",
+            "智能体",
+            "rag",
+            "知识图谱",
+            "neo4j",
+            "embedding",
+        ]
+        if any(kw in title or kw in body for kw in keywords):
+            dev_related_notes.append(note)
+
+    prompt = f"""你是一个资深技术架构师和AI产品专家。请分析以下备忘录内容，推理出具体的编程开发方向和实现路径。
+
+要求：
+1. 从备忘录中提取与编程开发相关的核心概念
+2. 分析这些概念之间的关联
+3. 给出具体的技术选型建议
+4. 规划实现路径优先级
+
+相关笔记数量：{len(dev_related_notes)}
+
+笔记内容：
+"""
+
+    for i, note in enumerate(dev_related_notes[:15]):
+        prompt += f"\n{i + 1}. {note.get('title', '')}\n{note.get('body', '')[:500]}\n"
+
+    prompt += """
+请输出JSON格式的建议：
+{
+  "core_concepts": ["概念1", "概念2", ...],
+  "technical_stack": {
+    "recommended": ["技术1", "技术2"],
+    "alternatives": ["备选1", "备选2"]
+  },
+  "implementation_phases": [
+    {
+      "phase": "阶段1",
+      "description": "描述",
+      "priority": 1-5,
+      "key_tasks": ["任务1", "任务2"]
+    }
+  ],
+  "risks": ["风险1", "风险2"],
+  "opportunities": ["机会1", "机会2"]
+}
+只输出JSON，不要其他内容。
+"""
+
+    response = client.chat.completions.create(
+        model=settings.llm_model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+    )
+
+    content = response.choices[0].message.content
+    try:
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        if start >= 0 and end > start:
+            return json.loads(content[start:end])
+    except Exception:
+        pass
+    return {}
+
+
+def generate_reasoning_report(
+    client: OpenAI,
+    notes: list[dict[str, Any]],
+    clusters: list[dict[str, Any]],
+    cross_links: list[dict[str, Any]],
+    card_results: list[dict[str, Any]],
+    output_dir: Path,
+) -> None:
+    """生成推理报告"""
+    print("分析开发方向...")
+    dev_analysis = analyze_development_direction(
+        client, notes, clusters, cross_links, card_results
+    )
+
+    md_lines = [
+        "# 编程开发方向推理报告",
+        "",
+        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- **分析笔记数**: {len(notes)}",
+        "",
+    ]
+
+    if dev_analysis:
+        if dev_analysis.get("core_concepts"):
+            md_lines.extend(
+                [
+                    "## 核心概念",
+                    "",
+                    ", ".join(dev_analysis["core_concepts"]),
+                    "",
+                ]
+            )
+
+        if dev_analysis.get("technical_stack"):
+            stack = dev_analysis["technical_stack"]
+            md_lines.extend(
+                [
+                    "## 技术选型",
+                    "",
+                    "**推荐技术:** " + ", ".join(stack.get("recommended", [])),
+                    "",
+                    "**备选技术:** " + ", ".join(stack.get("alternatives", [])),
+                    "",
+                ]
+            )
+
+        if dev_analysis.get("implementation_phases"):
+            md_lines.append("## 实现路径")
+            md_lines.append("")
+            for phase in dev_analysis["implementation_phases"]:
+                priority = phase.get("priority", 0)
+                star = "⭐" * (6 - priority)
+                md_lines.append(f"### {phase.get('phase', '')} {star}")
+                md_lines.append("")
+                md_lines.append(phase.get("description", ""))
+                md_lines.append("")
+                md_lines.append("**关键任务:**")
+                for task in phase.get("key_tasks", []):
+                    md_lines.append(f"- {task}")
+                md_lines.append("")
+
+        if dev_analysis.get("risks"):
+            md_lines.extend(
+                [
+                    "## 风险与挑战",
+                    "",
+                ]
+            )
+            for risk in dev_analysis["risks"]:
+                md_lines.append(f"- {risk}")
+            md_lines.append("")
+
+        if dev_analysis.get("opportunities"):
+            md_lines.extend(
+                [
+                    "## 机会与价值",
+                    "",
+                ]
+            )
+            for opp in dev_analysis["opportunities"]:
+                md_lines.append(f"- {opp}")
+            md_lines.append("")
+
+        with open(output_dir / "推理报告.md", "w", encoding="utf-8") as f:
+            f.write("\n".join(md_lines))
+
+        with open(output_dir / "开发方向分析.json", "w", encoding="utf-8") as f:
+            json.dump(dev_analysis, f, ensure_ascii=False, indent=2)
+
+        print(f"推理报告已保存")
+    else:
+        print("推理分析失败")
 
 
 if __name__ == "__main__":
