@@ -574,6 +574,49 @@ def run_memo_activity(
         f.write("\n".join(ttl_lines))
     print(f"知识图谱已保存到: {ttl_file}")
 
+    print("发现跨组关联...")
+    cross_links = find_cross_cluster_links(embeddings, clusters, notes)
+    with open(output_dir / "跨组关联.json", "w", encoding="utf-8") as f:
+        json.dump(cross_links, f, ensure_ascii=False, indent=2)
+    print(f"发现 {len(cross_links)} 个跨组关联")
+
+    print("实体消歧...")
+    combined_ttl = "\n".join(ttl_lines)
+    dedup_result = deduplicate_entities(client, combined_ttl)
+    if dedup_result:
+        with open(output_dir / "术语映射表.json", "w", encoding="utf-8") as f:
+            json.dump(dedup_result, f, ensure_ascii=False, indent=2)
+        print(f"消歧完成，{len(dedup_result.get('mapping', {}))} 个映射")
+
+    print("意图分类与卡片生成...")
+    card_results = batch_classify_notes(client, notes)
+    with open(output_dir / "知识卡片草稿.json", "w", encoding="utf-8") as f:
+        json.dump(card_results, f, ensure_ascii=False, indent=2)
+
+    md_cards = ["# 知识卡片集\n\n"]
+    intent_counts = {}
+    for d in card_results:
+        intent = d.get("primary_intent", "Unknown")
+        intent_counts[intent] = intent_counts.get(intent, 0) + 1
+        draft = d.get("card_draft", {})
+        if draft:
+            md_cards.append(
+                f"## {draft.get('title', d.get('original_title', 'Untitled'))}\n\n"
+            )
+            md_cards.append(f"**意图**: {intent}\n\n")
+            md_cards.append(f"**摘要**: {draft.get('summary', '')}\n\n")
+            if draft.get("key_points"):
+                md_cards.append("### 要点\n\n")
+                for p in draft.get("key_points", []):
+                    md_cards.append(f"- {p}\n")
+                md_cards.append("\n")
+            md_cards.append("---\n\n")
+
+    with open(output_dir / "知识卡片集.md", "w", encoding="utf-8") as f:
+        f.writelines(md_cards)
+    print(f"生成 {len(card_results)} 张知识卡片")
+    print(f"意图分布: {intent_counts}")
+
     print("生成内容介绍...")
     content_intro = summarize_content(client, notes)
 
@@ -612,6 +655,175 @@ def _extract_keywords(texts: list[str]) -> list[str]:
     words = re.findall(r"[\u4e00-\u9fa5]{2,4}", all_text)
     counter = Counter(words)
     return [w for w, _ in counter.most_common(15)]
+
+
+def compute_cluster_centroids(
+    embeddings: list[list[float]], clusters: list[list[int]]
+) -> list[list[float]]:
+    """计算每个分组的质心向量"""
+    centroids = []
+    for cluster_indices in clusters:
+        cluster_vectors = [embeddings[i] for i in cluster_indices]
+        centroid = [sum(v) / len(v) for v in zip(*cluster_vectors)]
+        centroids.append(centroid)
+    return centroids
+
+
+def find_bridge_notes(
+    embeddings: list[list[float]],
+    cluster_indices: list[int],
+    centroid_b: list[float],
+    notes: list[dict[str, Any]],
+    top_k: int = 2,
+) -> list[dict[str, Any]]:
+    """找出连接两个分组的桥梁笔记"""
+    scores = []
+    for idx in cluster_indices:
+        sim = cosine_similarity(embeddings[idx], centroid_b)
+        scores.append((idx, sim))
+    scores.sort(key=lambda x: x[1], reverse=True)
+    return [
+        {
+            "title": notes[idx].get("title", ""),
+            "index": idx,
+            "similarity": round(sim, 3),
+        }
+        for idx, sim in scores[:top_k]
+    ]
+
+
+def find_cross_cluster_links(
+    embeddings: list[list[float]],
+    clusters: list[list[int]],
+    notes: list[dict[str, Any]],
+    threshold: float = 0.4,
+) -> list[dict[str, Any]]:
+    """发现跨组关联"""
+    centroids = compute_cluster_centroids(embeddings, clusters)
+    cross_links = []
+
+    for i in range(len(clusters)):
+        for j in range(i + 1, len(clusters)):
+            sim = cosine_similarity(centroids[i], centroids[j])
+            if sim > threshold:
+                bridge_notes_a = find_bridge_notes(
+                    embeddings, clusters[i], centroids[j], notes
+                )
+                bridge_notes_b = find_bridge_notes(
+                    embeddings, clusters[j], centroids[i], notes
+                )
+                cross_links.append(
+                    {
+                        "group_a": i + 1,
+                        "group_b": j + 1,
+                        "similarity": round(sim, 3),
+                        "bridge_from_a": bridge_notes_a,
+                        "bridge_from_b": bridge_notes_b,
+                    }
+                )
+
+    return cross_links
+
+
+def deduplicate_entities(client: OpenAI, ttl_content: str) -> dict[str, Any]:
+    """从 TTL 中提取实体并进行消歧"""
+    entities = list(set(re.findall(r'rdfs:label\s+"([^"]+)"', ttl_content)))
+    if not entities:
+        return {}
+
+    entity_list = "\n".join(entities[:50])
+    prompt = f"""你是一个知识图谱专家。请分析以下从备忘录中提取的实体列表。
+有些实体虽然名称不同，但指代的是同一个概念（例如"IAM"和"身份与访问管理"）。
+请根据你的知识判断，生成一份映射表。
+
+实体列表：
+{entity_list}
+
+请以 JSON 格式输出映射关系：
+{{
+  "canonical_entities": ["实体A", "实体B", ...],
+  "mapping": {{
+    "别名": "标准名称"
+  }}
+}}
+只输出JSON，不要其他内容。
+"""
+    response = client.chat.completions.create(
+        model=settings.llm_model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.1,
+    )
+
+    content = response.choices[0].message.content
+    try:
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        if start >= 0 and end > start:
+            return json.loads(content[start:end])
+    except Exception:
+        pass
+    return {}
+
+
+def classify_and_draft_note(client: OpenAI, note: dict[str, Any]) -> dict[str, Any]:
+    """分类并生成卡片草稿"""
+    prompt = f"""请分析以下备忘录内容，判断其主要意图类型。
+
+标题：{note.get("title", "")}
+正文：{note.get("body", "")[:1000]}
+
+意图类型定义：
+- Definition: 定义概念、解释术语、阐述原理
+- Action: 待办事项、任务计划、行动步骤
+- Case: 具体案例、实验记录、故事片段
+- Question: 疑问、困惑、需要解决的问题
+- Insight: 顿悟、灵感、核心观点
+
+请输出 JSON：
+{{
+  "primary_intent": "意图类型",
+  "card_draft": {{
+    "title": "提炼后的正式标题",
+    "summary": "一句话核心摘要",
+    "key_points": ["要点1", "要点2"]
+  }}
+}}
+只输出JSON，不要其他内容。
+"""
+    response = client.chat.completions.create(
+        model=settings.llm_model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+    )
+
+    content = response.choices[0].message.content
+    try:
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        if start >= 0 and end > start:
+            return json.loads(content[start:end])
+    except Exception:
+        pass
+    return {"primary_intent": "Unknown", "card_draft": {}}
+
+
+def batch_classify_notes(
+    client: OpenAI, notes: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """批量分类笔记意图并生成草稿"""
+    results = []
+    for i, note in enumerate(notes):
+        if i % 5 == 0:
+            print(f"  意图分类进度: {i}/{len(notes)}")
+        res = classify_and_draft_note(client, note)
+        results.append(
+            {
+                "original_title": note.get("title"),
+                "index": i,
+                **res,
+            }
+        )
+    return results
 
 
 if __name__ == "__main__":

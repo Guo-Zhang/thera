@@ -8,9 +8,15 @@
 
 - **输入**: `data/infra/apple/notes.json`
 - **输出**: 
-  - `data/activity/memo/analysis.json` - 分析结果（兼容旧版本）
-  - `data/activity/memo/knowledge.ttl` - 知识图谱
-  - `data/activity/memo/report.json` - 分析报告（含质量评估）
+  - `vectors.json` - 嵌入向量和相似度矩阵
+  - `knowledge.ttl` - 知识图谱
+  - `跨组关联.json` - 跨分组关联
+  - `术语映射表.json` - 实体消歧映射
+  - `知识卡片草稿.json` - 卡片草稿
+  - `知识卡片集.md` - Markdown 格式卡片集
+  - `报告.md` - 内容介绍
+  - `评估.md` - 质量评估
+  - `复盘.md` - 经验总结
 
 ## 算法流程
 
@@ -47,7 +53,34 @@ clusters = cluster_notes(similarity_matrix, threshold=0.5)
 ttl_triplets = extract_triplets(client, cluster_notes)
 ```
 
-### 5. 质量评估
+### 5. 跨组关联发现
+
+计算分组质心向量，找出不同分组之间的潜在关联：
+
+```python
+cross_links = find_cross_cluster_links(embeddings, clusters, notes)
+# 输出: [{"group_a": 1, "group_b": 4, "similarity": 0.45, "bridge_notes": [...]}]
+```
+
+### 6. 实体消歧与合并
+
+使用 LLM 统一实体命名：
+
+```python
+dedup_result = deduplicate_entities(client, combined_ttl)
+# 输出: {"canonical_entities": [...], "mapping": {"别名": "标准名称"}}
+```
+
+### 7. 意图分类与卡片生成
+
+识别笔记意图类型，生成结构化知识卡片：
+
+```python
+card_results = batch_classify_notes(client, notes)
+# 意图类型: Definition, Action, Case, Question, Insight
+```
+
+### 8. 质量评估
 
 使用 LLM 评估知识图谱质量：
 
@@ -62,20 +95,20 @@ quality = evaluate_ttl_quality(client, ttl_content, titles)
 run_memo_activity(
     notes_file=None,              # 输入文件路径
     output_dir=None,              # 输出目录
-    similarity_threshold=0.5,     # 相似度阈值
+    similarity_threshold=0.5,   # 相似度阈值
     enable_quality_check=True,   # 是否启用质量评估
 )
 ```
 
 ## 模块化设计
 
-- `create_llm_client()`: 创建 LLM 客户端，可替换为其他实现
+- `create_llm_client()`: 创建 LLM 客户端
 - `get_embedding()`: 获取嵌入向量
-- `extract_triplets()`: 提取三元组
-- `evaluate_ttl_quality()`: 评估质量
-
-## 后续优化方向
-
-1. **改进聚类算法** - 使用 K-Means 或层次聚类
-2. **增加摘要生成** - 使用 LLM 生成更准确的摘要
-3. **支持更多评估维度** - 如新颖性、实用性等
+- `compute_embeddings()`: 批量计算嵌入
+- `cosine_similarity()`: 计算余弦相似度
+- `cluster_notes()`: 基于阈值的聚类
+- `extract_triplets()`: 提取知识图谱三元组
+- `find_cross_cluster_links()`: 发现跨组关联
+- `deduplicate_entities()`: 实体消歧
+- `classify_and_draft_note()`: 意图分类与卡片生成
+- `evaluate_ttl_quality()`: 评估知识图谱质量
