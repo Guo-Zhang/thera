@@ -70,6 +70,23 @@ Key classes:
 ### 5. Core Package (`src/thera/`)
 Currently minimal - package entry points only. Main logic lives in examples.
 
+### 6. Infra Module (`src/thera/infra/`)
+Infrastructure integrations for data import:
+
+- **apple.py**: Apple Notes import via AppleScript
+  - `get_notes_from_folder(folder_name)`: Get notes from specific folder
+  - `export_notes(output_dir, folder_name)`: Export notes to JSON
+  - `list_notes(output_dir)`: List exported notes
+  - Default folder: "思考"
+
+### 7. Activity Module (`src/thera/activity/`)
+Activity pipelines for processing and analyzing data:
+
+- **memo.py**: Memo activity pipeline
+  - `run_memo_activity()`: Analyze Apple Notes, compute similarity, cluster and extract knowledge
+  - Input: `data/infra/apple/notes.json`
+  - Output: `data/activity/memo/analysis.json`
+
 ## Data Storage
 
 - `data/`: Runtime data (jupyterbook content, analysis outputs)
@@ -91,3 +108,45 @@ Currently minimal - package entry points only. Main logic lives in examples.
 2. **不主动删除** - 避免使用 `rm -rf` 等破坏性命令，优先用 safe delete 或先检查
 3. **操作前备份** - 重要数据操作前，先检查是否存在，必要时备份
 4. **读取为主** - 优先读取用户数据而非修改，修改前确认
+
+## Common Tasks
+
+### Export Apple Notes
+
+```bash
+# Export notes from "思考" folder
+uv run python -c "from thera.infra.apple import export_notes, get_default_output_dir; export_notes(get_default_output_dir())"
+```
+
+### Run Memo Activity
+
+```bash
+# Analyze Apple Notes, compute similarity, cluster and extract knowledge
+uv run python -c "from thera.activity.memo import run_memo_activity; run_memo_activity()"
+
+# With custom parameters
+uv run python -c "
+from thera.activity.memo import run_memo_activity
+run_memo_activity(similarity_threshold=0.6, enable_quality_check=True)
+"
+```
+
+## Developer Documentation
+
+Developer docs in `docs/dev/` serve as a knowledge base for this project:
+
+- **Purpose**: Record implementation details, pitfalls, and lessons learned during development
+- **When to update**: After completing a feature or fixing a significant bug
+- **What to document**: Development logic, algorithm design, code patterns, common errors
+- **What NOT to document**: Specific run results or outputs - these should be saved to `data/activity/<module>/` as reports
+- **Module comments**: Keep module-level docstrings updated with input/output/algorithm
+- **Location**: `docs/dev/infra/` for infrastructure modules, `docs/dev/activity/` for activity modules
+
+## Module Evaluation
+
+Each module that processes data must include an evaluation program:
+
+- **Purpose**: Assess the quality of module outputs (e.g., knowledge graphs, clusters)
+- **Implementation**: Use LLM to evaluate quality dimensions (completeness, accuracy, coherence)
+- **Output**: Evaluation results must be included in the module's report
+- **Example**: Memo activity evaluates TTL knowledge graph quality and includes scores in `report.json`
