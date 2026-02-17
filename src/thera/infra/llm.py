@@ -199,6 +199,74 @@ def evaluate_ttl_quality(
     return json_request(prompt)
 
 
+def analyze_development_direction(
+    items: list[dict[str, Any]],
+    format_fn: Callable[[dict], str],
+    clusters: list[dict[str, Any]],
+    max_clusters: int = 5,
+) -> dict[str, Any]:
+    """分析发展方向"""
+    prompt = f"""请分析以下内容集合的发展方向和趋势。
+
+内容总数: {len(items)}
+分组数: {len(clusters)}
+
+"""
+    if clusters:
+        prompt += "各分组概述:\n"
+        for cluster in clusters[:max_clusters]:
+            prompt += f"- 分组 {cluster['cluster_id']}: {cluster.get('note_count', cluster.get('doc_count', 0))} 项\n"
+
+    prompt += """
+请输出JSON格式结果：
+{
+    "main_themes": ["主题1", "主题2"],
+    "development_trends": ["趋势1", "趋势2"],
+    "key_insights": ["洞察1", "洞察2"],
+    "recommendations": ["建议1", "建议2"]
+}
+
+只输出JSON。
+"""
+    return json_request(prompt)
+
+
+def deduplicate_entities(ttl_content: str) -> dict[str, Any]:
+    """去重知识图谱实体"""
+    prompt = f"""请从以下TTL知识图谱中提取所有唯一实体，并去除重复。
+
+知识图谱内容：
+{ttl_content}
+
+请输出JSON格式结果：
+{{
+    "entities": ["实体1", "实体2", ...],
+    "duplicates": {{"原始实体": "标准实体"}}
+}}
+
+只输出JSON。
+"""
+    return json_request(prompt)
+
+
+def classify_and_draft(
+    item: dict[str, Any],
+    format_fn: Callable[[dict], str],
+    fields: dict[str, str | list[str]],
+) -> dict[str, Any]:
+    """通用分类和起草"""
+    prompt = f"""请分析以下内容，给出分类和总结。
+
+{format_fn(item)}
+
+请输出JSON格式结果：
+{json.dumps({k: v for k, v in fields.items()}, ensure_ascii=False, indent=2)}
+
+只输出JSON。
+"""
+    return json_request(prompt)
+
+
 if __name__ == "__main__":
     client = create_client()
     response = client.chat.completions.create(

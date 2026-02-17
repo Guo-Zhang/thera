@@ -525,6 +525,151 @@ def generate_report(
     return report
 
 
+def compute_cluster_centroids(
+    embeddings: list[list[float]], clusters: list[list[int]]
+) -> list[list[float]]:
+    """计算每个聚类的质心"""
+    import numpy as np
+
+    embeddings_array = np.array(embeddings)
+    centroids = []
+    for cluster in clusters:
+        cluster_embeddings = embeddings_array[cluster]
+        centroid = cluster_embeddings.mean(axis=0).tolist()
+        centroids.append(centroid)
+    return centroids
+
+
+def find_bridge_notes(
+    embeddings: list[list[float]], clusters: list[list[int]], threshold: float = 0.3
+) -> list[dict[str, Any]]:
+    """找出连接不同聚类的桥接笔记"""
+    import numpy as np
+
+    embeddings_array = np.array(embeddings)
+    centroids = compute_cluster_centroids(embeddings, clusters)
+    n_clusters = len(clusters)
+
+    if n_clusters < 2:
+        return []
+
+    bridge_notes = []
+    for i, cluster in enumerate(clusters):
+        for note_idx in cluster:
+            note_embedding = embeddings_array[note_idx]
+            similarities = []
+            for j, centroid in enumerate(centroids):
+                if i == j:
+                    continue
+                sim = np.dot(note_embedding, centroid) / (
+                    np.linalg.norm(note_embedding) * np.linalg.norm(centroid) + 1e-8
+                )
+                similarities.append((j, sim))
+
+            max_sim = max(similarities, key=lambda x: x[1])
+            if max_sim[1] > threshold:
+                bridge_notes.append(
+                    {
+                        "note_index": note_idx,
+                        "from_cluster": i,
+                        "to_cluster": max_sim[0],
+                        "similarity": float(max_sim[1]),
+                    }
+                )
+
+    return bridge_notes
+
+
+def find_cross_cluster_links(
+    embeddings: list[list[float]], clusters: list[list[int]], top_n: int = 3
+) -> list[dict[str, Any]]:
+    """找出跨聚类的高相似度连接"""
+    import numpy as np
+
+    embeddings_array = np.array(embeddings)
+    n_clusters = len(clusters)
+    cross_links = []
+
+    for i in range(n_clusters):
+        for j in range(i + 1, n_clusters):
+            cluster_i_embeddings = embeddings_array[clusters[i]]
+            cluster_j_embeddings = embeddings_array[clusters[j]]
+
+            sim_matrix = np.dot(cluster_i_embeddings, cluster_j_embeddings.T)
+            sim_matrix = sim_matrix / (
+                np.linalg.norm(cluster_i_embeddings, axis=1, keepdims=True)
+                * np.linalg.norm(cluster_j_embeddings, axis=1, keepdims=True).T
+                + 1e-8
+            )
+
+            for _ in range(top_n):
+                max_idx = np.unravel_index(np.argmax(sim_matrix), sim_matrix.shape)
+                max_sim = sim_matrix[max_idx]
+                if max_sim > 0.5:
+                    cross_links.append(
+                        {
+                            "from_cluster": i,
+                            "to_cluster": j,
+                            "from_note": clusters[i][max_idx[0]],
+                            "to_note": clusters[j][max_idx[1]],
+                            "similarity": float(max_sim),
+                        }
+                    )
+                    sim_matrix[max_idx[0], max_idx[1]] = 0
+                else:
+                    break
+
+    return cross_links
+
+
+def generate_reasoning_report(
+    direction_analysis: dict[str, Any],
+    clusters: list[dict[str, Any]],
+    output_dir: Path,
+    title: str = "推理报告",
+) -> str:
+    """生成推理报告"""
+    from datetime import datetime
+
+    md = [
+        f"# {title}",
+        "",
+        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- **分组数**: {len(clusters)}",
+        "",
+    ]
+
+    if direction_analysis.get("main_themes"):
+        md.extend(["## 主要主题", ""])
+        for theme in direction_analysis["main_themes"]:
+            md.append(f"- {theme}")
+        md.append("")
+
+    if direction_analysis.get("development_trends"):
+        md.extend(["## 发展趋势", ""])
+        for trend in direction_analysis["development_trends"]:
+            md.append(f"- {trend}")
+        md.append("")
+
+    if direction_analysis.get("key_insights"):
+        md.extend(["## 关键洞察", ""])
+        for insight in direction_analysis["key_insights"]:
+            md.append(f"- {insight}")
+        md.append("")
+
+    if direction_analysis.get("recommendations"):
+        md.extend(["## 建议", ""])
+        for rec in direction_analysis["recommendations"]:
+            md.append(f"- {rec}")
+        md.append("")
+
+    report_path = output_dir / f"{title}.md"
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(md))
+
+    return str(report_path)
+
+
 class KnowlDomain(Domain):
     name = "knowl"
     description = "知识工程域 - 知识图谱、RAG"

@@ -22,10 +22,12 @@ from thera.domain.knowl import (
     embedding_similarity_matrix,
     extract_keywords,
     generate_report,
+    generate_reasoning_report,
     get_embeddings,
 )
 from thera.infra.llm import (
-    chat_str as llm_chat_str,
+    analyze_development_direction as llm_analyze_direction,
+    classify_and_draft as llm_classify,
     evaluate_content_quality as llm_evaluate_content,
     evaluate_ttl_quality as llm_evaluate_ttl,
     extract_triplets as llm_extract_triplets,
@@ -171,228 +173,117 @@ def load_notes(notes_file: Path) -> list[dict[str, Any]]:
         return json.load(f)
 
 
-def compute_cluster_centroids(
-    embeddings: list[list[float]], clusters: list[list[int]]
-) -> list[list[float]]:
-    """计算每个聚类的质心"""
-    import numpy as np
-
-    embeddings_array = np.array(embeddings)
-    centroids = []
-    for cluster in clusters:
-        cluster_embeddings = embeddings_array[cluster]
-        centroid = cluster_embeddings.mean(axis=0).tolist()
-        centroids.append(centroid)
-    return centroids
-
-
-def find_bridge_notes(
-    embeddings: list[list[float]], clusters: list[list[int]], threshold: float = 0.3
-) -> list[dict[str, Any]]:
-    """找出连接不同聚类的桥接笔记"""
-    import numpy as np
-
-    embeddings_array = np.array(embeddings)
-    centroids = compute_cluster_centroids(embeddings, clusters)
-    n_clusters = len(clusters)
-
-    if n_clusters < 2:
-        return []
-
-    bridge_notes = []
-    for i, cluster in enumerate(clusters):
-        for note_idx in cluster:
-            note_embedding = embeddings_array[note_idx]
-            similarities = []
-            for j, centroid in enumerate(centroids):
-                if i == j:
-                    continue
-                sim = np.dot(note_embedding, centroid) / (
-                    np.linalg.norm(note_embedding) * np.linalg.norm(centroid) + 1e-8
-                )
-                similarities.append((j, sim))
-
-            max_sim = max(similarities, key=lambda x: x[1])
-            if max_sim[1] > threshold:
-                bridge_notes.append(
-                    {
-                        "note_index": note_idx,
-                        "from_cluster": i,
-                        "to_cluster": max_sim[0],
-                        "similarity": float(max_sim[1]),
-                    }
-                )
-
-    return bridge_notes
-
-
-def find_cross_cluster_links(
-    embeddings: list[list[float]], clusters: list[list[int]], top_n: int = 3
-) -> list[dict[str, Any]]:
-    """找出跨聚类的高相似度连接"""
-    import numpy as np
-
-    embeddings_array = np.array(embeddings)
-    n_clusters = len(clusters)
-    cross_links = []
-
-    for i in range(n_clusters):
-        for j in range(i + 1, n_clusters):
-            cluster_i_embeddings = embeddings_array[clusters[i]]
-            cluster_j_embeddings = embeddings_array[clusters[j]]
-
-            sim_matrix = np.dot(cluster_i_embeddings, cluster_j_embeddings.T)
-            sim_matrix = sim_matrix / (
-                np.linalg.norm(cluster_i_embeddings, axis=1, keepdims=True)
-                * np.linalg.norm(cluster_j_embeddings, axis=1, keepdims=True).T
-                + 1e-8
-            )
-
-            for _ in range(top_n):
-                max_idx = np.unravel_index(np.argmax(sim_matrix), sim_matrix.shape)
-                max_sim = sim_matrix[max_idx]
-                if max_sim > 0.5:
-                    cross_links.append(
-                        {
-                            "from_cluster": i,
-                            "to_cluster": j,
-                            "from_note": clusters[i][max_idx[0]],
-                            "to_note": clusters[j][max_idx[1]],
-                            "similarity": float(max_sim),
-                        }
-                    )
-                    sim_matrix[max_idx[0], max_idx[1]] = 0
-                else:
-                    break
-
-    return cross_links
-
-
-def deduplicate_entities(ttl_content: str) -> dict[str, Any]:
-    """使用 LLM 去重知识图谱实体"""
-    prompt = f"""请从以下TTL知识图谱中提取所有唯一实体，并去除重复。
-
-知识图谱内容：
-{ttl_content}
-
-请输出JSON格式结果：
-{{
-    "entities": ["实体1", "实体2", ...],  // 唯一实体列表
-    "duplicates": {{"原始实体": "标准实体"}}  // 重复映射
-}}
-
-只输出JSON。
-"""
-    return llm_json_request(prompt)
-
-
-def classify_and_draft_note(note: dict[str, Any]) -> dict[str, Any]:
-    """使用 LLM 分类和起草笔记"""
-    prompt = f"""请分析以下备忘录，给出分类和总结。
-
-标题: {note.get("title", "")}
-内容: {note.get("body", "")}
-
-请输出JSON格式结果：
-{{
-    "category": "分类名称",
-    "summary": "50字以内的总结",
-    "keywords": ["关键词1", "关键词2"],
-    "action_items": ["待办事项1", "待办事项2"]  // 如果有
-}}
-
-只输出JSON。
-"""
-    result = llm_json_request(prompt)
-    if not result:
-        return {"error": "分类失败"}
-    return result
-
-
 def batch_classify_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """批量分类笔记"""
     results = []
     for i, note in enumerate(notes):
         if i % 10 == 0:
             print(f"  分类进度: {i}/{len(notes)}")
-        result = classify_and_draft_note(note)
-        results.append(result)
+        result = llm_classify(
+            note,
+            lambda n: f"标题: {n.get('title', '')}\n内容: {n.get('body', '')}",
+            {
+                "category": "分类名称",
+                "summary": "50字以内的总结",
+                "keywords": ["关键词1", "关键词2"],
+                "action_items": ["待办事项1"],
+            },
+        )
+        results.append(result or {"error": "分类失败"})
     return results
 
 
-def analyze_development_direction(
-    notes: list[dict[str, Any]], clusters: list[dict[str, Any]]
+def analyze_thinking_pattern(
+    notes: list[dict[str, Any]],
+    clusters: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """分析备忘录的发展方向"""
-    prompt = f"""请分析以下备忘录集合的发展方向和趋势。
+    """分析思维模式并给出维护建议"""
+    prompt = f"""请分析以下备忘录的分类模式和内容特征，推测用户的思维模式，并给出维护建议。
 
 备忘录总数: {len(notes)}
 分组数: {len(clusters)}
 
+各分组概述:
 """
-    if clusters:
-        prompt += "各分组概述:\n"
-        for cluster in clusters[:5]:
-            prompt += f"- 分组 {cluster['cluster_id']}: {cluster.get('note_count', 0)} 条笔记\n"
+    for cluster in clusters[:5]:
+        titles = cluster.get("titles", [])[:5]
+        keywords = cluster.get("keywords", [])[:5]
+        prompt += (
+            f"\n- 分组 {cluster['cluster_id']}: {cluster.get('note_count', 0)} 条笔记"
+        )
+        prompt += f"\n  标题示例: {', '.join(titles[:3])}"
+        prompt += f"\n  关键词: {', '.join(keywords[:5])}"
 
     prompt += """
-请输出JSON格式结果：
+
+请分析并输出JSON格式结果：
 {
-    "main_themes": ["主题1", "主题2"],
-    "development_trends": ["趋势1", "趋势2"],
-    "key_insights": ["洞察1", "洞察2"],
-    "recommendations": ["建议1", "建议2"]
+    "thinking_pattern": {
+        "type": "思维模式类型（如：系统化思维、创意型、战略型、分析型、综合型等）",
+        "description": "思维模式描述"
+    },
+    "characteristics": [
+        "特征1（如：喜欢分类归档）",
+        "特征2（如：关注长远规划）"
+    ],
+    "strengths": [
+        "优势1",
+        "优势2"
+    ],
+    "blind_spots": [
+        "盲点1",
+        "盲点2"
+    ],
+    "maintenance_suggestions": [
+        "建议1（如：建议每周整理一次）",
+        "建议2（如：可以尝试新的分类维度）"
+    ]
 }
 
 只输出JSON。
 """
-    result = llm_json_request(prompt)
-    if not result:
-        return {"error": "分析失败"}
-    return result
+    return llm_json_request(prompt)
 
 
-def generate_reasoning_report(
-    direction_analysis: dict[str, Any],
-    clusters: list[dict[str, Any]],
+def generate_thinking_report(
+    thinking_analysis: dict[str, Any],
     output_dir: Path,
 ) -> str:
-    """生成推理报告"""
+    """生成思维模式报告"""
     from datetime import datetime
 
+    pattern = thinking_analysis.get("thinking_pattern", {})
     md = [
-        "# 备忘录发展方向推理报告",
+        "# 思维模式分析报告",
         "",
         f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **分组数**: {len(clusters)}",
+        "",
+        "## 思维模式",
+        "",
+        f"**类型**: {pattern.get('type', '未知')}",
+        "",
+        pattern.get("description", ""),
+        "",
+        "## 特征分析",
         "",
     ]
 
-    if direction_analysis.get("main_themes"):
-        md.extend(["## 主要主题", ""])
-        for theme in direction_analysis["main_themes"]:
-            md.append(f"- {theme}")
-        md.append("")
+    for char in thinking_analysis.get("characteristics", []):
+        md.append(f"- {char}")
 
-    if direction_analysis.get("development_trends"):
-        md.extend(["## 发展趋势", ""])
-        for trend in direction_analysis["development_trends"]:
-            md.append(f"- {trend}")
-        md.append("")
+    md.extend(["", "## 优势", ""])
+    for s in thinking_analysis.get("strengths", []):
+        md.append(f"- {s}")
 
-    if direction_analysis.get("key_insights"):
-        md.extend(["## 关键洞察", ""])
-        for insight in direction_analysis["key_insights"]:
-            md.append(f"- {insight}")
-        md.append("")
+    md.extend(["", "## 盲点", ""])
+    for b in thinking_analysis.get("blind_spots", []):
+        md.append(f"- {b}")
 
-    if direction_analysis.get("recommendations"):
-        md.extend(["## 建议", ""])
-        for rec in direction_analysis["recommendations"]:
-            md.append(f"- {rec}")
-        md.append("")
+    md.extend(["", "## 维护建议", ""])
+    for s in thinking_analysis.get("maintenance_suggestions", []):
+        md.append(f"- {s}")
 
-    report_path = output_dir / "发展方向推理.md"
+    report_path = output_dir / "思维模式分析.md"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md))
 
