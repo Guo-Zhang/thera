@@ -10,9 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10, <3.14"
 dependencies = [
     "graphiti-core>=0.23.1",
-    "instructor>=1.0.0",
     "lark-oapi>=1.5.3",
-    "llama-index>=0.14.0",
     "llvmlite>=0.44,<0.45",
     "neo4j-graphrag>=1.7.0",
     "openai>=2.7.1",
