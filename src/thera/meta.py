@@ -12,7 +12,7 @@ from enum import Enum
 from pathlib import Path
 
 # State - 状态管理
-from thera.state.storage_state import StorageState
+from thera.__main__ import StorageState
 
 
 # Domain - 知识领域

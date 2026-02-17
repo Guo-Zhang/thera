@@ -43,18 +43,18 @@ class TestThera:
         app.init()
         assert app.storage is not None
 
-    def test_switch_activity(self, tmp_path):
+    def test_switch_domain(self, tmp_path):
         app = Thera(storage_path=tmp_path)
         app.init()
-        app.switch_activity("think")
-        activity = app.activity_manager.get_current_activity()
-        assert activity is not None
-        assert activity.name == "think"
+        app.switch_domain("think")
+        domain = app.domain_manager.get_current_domain()
+        assert domain is not None
+        assert domain.name == "think"
 
-    def test_switch_activity_uninitialized(self):
+    def test_switch_domain_uninitialized(self):
         app = Thera()
         with pytest.raises(RuntimeError, match="not initialized"):
-            app.switch_activity("chat")
+            app.switch_domain("chat")
 
     def test_property_uninitialized(self):
         app = Thera()
