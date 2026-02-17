@@ -1,5 +1,5 @@
-from .think_domain import ThinkDomain
-from .write_domain import WriteDomain
-from .knowl_domain import KnowlDomain
+from .think import ThinkDomain
+from .write import WriteDomain
+from .knowl import KnowlDomain
 
 __all__ = ["ThinkDomain", "WriteDomain", "KnowlDomain"]

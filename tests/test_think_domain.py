@@ -11,7 +11,7 @@ import pytest
 
 from thera.__main__ import Thera
 from thera.state.storage_state import StorageState
-from thera.domain.think_domain import ThinkDomain
+from thera.domain.think import ThinkDomain
 
 
 class TestThinkDomain:

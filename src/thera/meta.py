@@ -60,10 +60,10 @@ class DomainManager:
         self._domains[domain_type] = domain_class
 
     def register_default_domains(self):
-        from thera.domain.connect_domain import ConnectDomain
-        from thera.domain.knowl_domain import KnowlDomain
-        from thera.domain.think_domain import ThinkDomain
-        from thera.domain.write_domain import WriteDomain
+        from thera.domain.connect import ConnectDomain
+        from thera.domain.knowl import KnowlDomain
+        from thera.domain.think import ThinkDomain
+        from thera.domain.write import WriteDomain
 
         self.register("think", ThinkDomain)
         self.register("write", WriteDomain)

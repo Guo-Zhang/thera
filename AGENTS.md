@@ -131,6 +131,13 @@ run_memo_activity(similarity_threshold=0.6, enable_quality_check=True)
 "
 ```
 
+### Run Audit
+
+```bash
+# Analyze AGENTS.md meta-cognition score
+uv run python scripts/audit.py
+```
+
 ## Developer Documentation
 
 Developer docs in `docs/dev/` serve as a knowledge base for this project:
@@ -150,3 +157,42 @@ Each module that processes data must include an evaluation program:
 - **Implementation**: Use LLM to evaluate quality dimensions (completeness, accuracy, coherence)
 - **Output**: Evaluation results must be included in the module's report
 - **Example**: Memo activity evaluates TTL knowledge graph quality and includes scores in `report.json`
+
+## Execution Checkpoints
+
+Each activity/pipeline script should include explicit validation checkpoints:
+
+```python
+# Example: run_memo_activity() checkpoint template
+def run_activity():
+    # 1. Execute main logic
+    result = do_something()
+
+    # 2. Validate output
+    assert result is not None
+    assert len(result) > 0, "No data generated"
+
+    # 3. Check quality metrics
+    if quality_score < threshold:
+        fallback_or_alert()
+
+    # 4. Log execution metadata
+    log({"duration": end - start, "quality": quality_score})
+```
+
+## Known Cognitive Gaps
+
+Known limitations in the current architecture:
+
+- **No confidence calibration**: LLM evaluation results lack confidence intervals
+- **No cross-module provenance**: Cannot trace knowledge quality across modules
+- **No runtime monitoring**: Progress tracking is static, not dynamic
+- **Limited emotion categories**: Sentiment analysis only supports positive/negative/neutral
+
+## Appendix: Ops Scripts
+
+Operational scripts for system maintenance:
+
+- **scripts/audit.py**: Meta-cognition analysis of AGENTS.md
+  - Run: `uv run python scripts/audit.py`
+  - Output: `docs/ops/reports/report.json`
