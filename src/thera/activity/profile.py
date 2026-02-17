@@ -25,7 +25,7 @@ from thera.domain.knowl import (
     generate_report,
     get_embeddings,
 )
-from thera.infra.aigc import (
+from thera.infra.ai import (
     evaluate_content_quality as llm_evaluate_content,
     evaluate_ttl_quality as llm_evaluate_ttl,
     extract_triplets as llm_extract_triplets,
