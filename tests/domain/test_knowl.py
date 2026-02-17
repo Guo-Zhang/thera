@@ -332,20 +332,9 @@ class TestLLMFunctions:
         assert "Hello" in result[0]
         assert "world" in result[1]
 
-    def test_parse_json_response_valid(self):
-        from thera.infra.llm import _parse_json
+    def test_json_request(self):
+        from thera.infra.llm import json_request
 
-        result = _parse_json('{"key": "value"}')
-        assert result == {"key": "value"}
-
-    def test_parse_json_response_with_wrapper(self):
-        from thera.infra.llm import _parse_json
-
-        result = _parse_json('text {"key": "value"} more')
-        assert result == {"key": "value"}
-
-    def test_parse_json_response_invalid(self):
-        from thera.infra.llm import _parse_json
-
-        result = _parse_json("not json")
-        assert result == {}
+        prompt = '请以 JSON 格式输出 {"hello": "world"}，只输出 JSON'
+        result = json_request(prompt)
+        assert isinstance(result, dict)

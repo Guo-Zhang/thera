@@ -3,17 +3,28 @@ LLM 基础设施模块
 """
 
 import json
-import re
-from typing import Any
+from typing import Any, Type, TypeVar, Callable
 
+import instructor
 from openai import OpenAI
+from pydantic import BaseModel
 
 from thera.config import settings
+
+T = TypeVar("T", bound=BaseModel)
 
 
 def create_client() -> OpenAI:
     """创建 LLM 客户端"""
     return OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+
+
+def create_instructor() -> instructor.Instructor:
+    """创建 Instructor 客户端"""
+    return instructor.from_openai(
+        OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url),
+        mode=instructor.Mode.JSON,
+    )
 
 
 def chat(
@@ -66,21 +77,36 @@ def stream(prompt: str, system_prompt: str = ""):
             yield delta.reasoning_content
 
 
-def _parse_json(response: str) -> dict[str, Any]:
-    """解析 JSON 响应"""
-    try:
-        return json.loads(response)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", response, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-    return {}
-
-
-def json_request(prompt: str, system_prompt: str = "") -> dict[str, Any]:
+def json_request(
+    prompt: str,
+    system_prompt: str = "",
+    model: str | None = None,
+    temperature: float = 0.7,
+) -> dict[str, Any]:
     """请求 JSON 格式响应"""
-    result = chat_str(prompt, system_prompt)
-    return _parse_json(result)
+    client = create_instructor()
+
+    class Response(BaseModel):
+        data: dict[str, Any]
+
+    try:
+        response = client.chat.completions.create(
+            model=model or settings.llm_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": prompt + "\n\n请以 JSON 格式输出，不要其他内容。",
+                },
+            ],
+            response_model=Response,
+            temperature=temperature,
+        )
+        return response.data
+    except Exception:
+        pass
+
+    return chat_str(prompt, system_prompt, model, temperature)
 
 
 def get_embeddings(texts: list[str], batch_size: int = 10):
@@ -105,7 +131,7 @@ def get_embedding(text: str) -> list[float]:
 
 def extract_triplets(
     items: list[dict[str, str]],
-    format_fn: callable,
+    format_fn: Callable[[dict], str],
     max_items: int = 8,
     max_content: int = 800,
 ) -> str:
@@ -135,7 +161,7 @@ kb:实体1 kb:关系 kb:实体2 .
 
 def summarize_content(
     items: list[dict[str, Any]],
-    format_fn: callable,
+    format_fn: Callable[[dict], str],
     max_items: int = 10,
     max_content: int = 500,
     max_length: int = 200,
@@ -155,7 +181,7 @@ def summarize_content(
 
 def evaluate_content_quality(
     items: list[dict[str, Any]],
-    format_fn: callable,
+    format_fn: Callable[[dict], str],
     criteria: dict[str, str],
     max_items: int = 8,
     max_content: int = 600,
@@ -164,7 +190,7 @@ def evaluate_content_quality(
     sample = items[:max_items]
     combined = "\n\n".join([format_fn(item)[:max_content] for item in sample])
 
-    criteria_str = "\n".join([f'"{k}": {v}' for k, v in criteria.items()])
+    criteria_lines = "\n".join([f"- {v}" for v in criteria.values()])
 
     prompt = f"""请评估以下内容的质量。
 
@@ -172,14 +198,9 @@ def evaluate_content_quality(
 {combined}
 
 请从以下维度评估并输出JSON格式结果：
-{{
-    {criteria_str}
-}}
-
-只输出JSON，不要其他内容。
+{criteria_lines}
 """
-    result = json_request(prompt)
-    return result or {"error": "评估失败"}
+    return json_request(prompt)
 
 
 def evaluate_ttl_quality(
@@ -189,7 +210,7 @@ def evaluate_ttl_quality(
     context: str = "",
 ) -> dict[str, Any]:
     """通用 TTL 质量评估"""
-    criteria_str = "\n".join([f'"{k}": {v}' for k, v in criteria.items()])
+    criteria_lines = "\n".join([f"- {v}" for v in criteria.values()])
 
     prompt = f"""{context}
 知识图谱内容：
@@ -198,14 +219,9 @@ def evaluate_ttl_quality(
 相关标题：{item_titles}
 
 请从以下维度评估并输出JSON格式结果：
-{{
-    {criteria_str}
-}}
-
-只输出JSON，不要其他内容。
+{criteria_lines}
 """
-    result = json_request(prompt)
-    return result or {"error": "评估失败"}
+    return json_request(prompt)
 
 
 if __name__ == "__main__":
