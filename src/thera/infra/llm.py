@@ -103,6 +103,111 @@ def get_embedding(text: str) -> list[float]:
     return get_embeddings([text])[0]
 
 
+def extract_triplets(
+    items: list[dict[str, str]],
+    format_fn: callable,
+    max_items: int = 8,
+    max_content: int = 800,
+) -> str:
+    """通用三元组抽取"""
+    combined = "\n\n".join(
+        [format_fn(item)[:max_content] for item in items[:max_items]]
+    )
+    prompt = f"""从以下文本中提取知识图谱三元组。
+要求：
+1. 提取实体和它们之间的关系
+2. 关系用动词或介词短语表示
+3. 只提取核心知识，忽略描述性内容
+
+内容：
+{combined}
+
+请以以下TTL格式输出（只输出TTL，不要其他内容）：
+@prefix kb: <http://example.org/knowledge/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+kb:实体1 rdfs:label "实体1" .
+kb:实体2 rdfs:label "实体2" .
+kb:实体1 kb:关系 kb:实体2 .
+"""
+    return chat_str(prompt, temperature=0.3)
+
+
+def summarize_content(
+    items: list[dict[str, Any]],
+    format_fn: callable,
+    max_items: int = 10,
+    max_content: int = 500,
+    max_length: int = 200,
+) -> str:
+    """通用内容总结"""
+    sample = items[:max_items]
+    combined = "\n\n".join([format_fn(item)[:max_content] for item in sample])
+    prompt = f"""请为以下内容生成一个简洁的介绍（{max_length}字以内）。
+
+内容：
+{combined}
+
+请直接输出介绍内容，不要其他格式。
+"""
+    return chat_str(prompt, temperature=0.3)
+
+
+def evaluate_content_quality(
+    items: list[dict[str, Any]],
+    format_fn: callable,
+    criteria: dict[str, str],
+    max_items: int = 8,
+    max_content: int = 600,
+) -> dict[str, Any]:
+    """通用内容质量评估"""
+    sample = items[:max_items]
+    combined = "\n\n".join([format_fn(item)[:max_content] for item in sample])
+
+    criteria_str = "\n".join([f'"{k}": {v}' for k, v in criteria.items()])
+
+    prompt = f"""请评估以下内容的质量。
+
+内容：
+{combined}
+
+请从以下维度评估并输出JSON格式结果：
+{{
+    {criteria_str}
+}}
+
+只输出JSON，不要其他内容。
+"""
+    result = json_request(prompt)
+    return result or {"error": "评估失败"}
+
+
+def evaluate_ttl_quality(
+    ttl_content: str,
+    item_titles: list[str],
+    criteria: dict[str, str],
+    context: str = "",
+) -> dict[str, Any]:
+    """通用 TTL 质量评估"""
+    criteria_str = "\n".join([f'"{k}": {v}' for k, v in criteria.items()])
+
+    prompt = f"""{context}
+知识图谱内容：
+{ttl_content}
+
+相关标题：{item_titles}
+
+请从以下维度评估并输出JSON格式结果：
+{{
+    {criteria_str}
+}}
+
+只输出JSON，不要其他内容。
+"""
+    result = json_request(prompt)
+    return result or {"error": "评估失败"}
+
+
 if __name__ == "__main__":
     client = create_client()
     response = client.chat.completions.create(

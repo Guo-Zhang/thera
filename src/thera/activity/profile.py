@@ -15,27 +15,22 @@
 """
 
 import json
-import re
-from collections import Counter
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from thera.config import settings
-from thera.domain.knowl import embedding_similarity_matrix
-from thera.infra.llm import (
-    chat_str as llm_chat_str,
-    json_request as llm_json_request,
+from thera.domain.knowl import (
+    cluster_notes,
+    embedding_similarity_matrix,
+    extract_keywords,
+    generate_report,
     get_embeddings,
 )
-
-
-def extract_keywords(texts: list[str]) -> list[str]:
-    """提取关键词"""
-    all_text = " ".join(texts)
-    words = re.findall(r"[\u4e00-\u9fa5]{2,4}", all_text)
-    counter = Counter(words)
-    return [w for w, _ in counter.most_common(15)]
+from thera.infra.llm import (
+    evaluate_content_quality as llm_evaluate_content,
+    evaluate_ttl_quality as llm_evaluate_ttl,
+    extract_triplets as llm_extract_triplets,
+    summarize_content as llm_summarize_content,
+)
 
 
 def scan_knowledge_base(base_dir: Path) -> list[dict[str, Any]]:
@@ -87,374 +82,13 @@ def scan_knowledge_base(base_dir: Path) -> list[dict[str, Any]]:
     return docs
 
 
-def compute_embeddings(docs: list[dict[str, Any]]) -> list[list[float]]:
-    """计算文档的语义嵌入向量"""
-    texts = [doc.get("title", "") + " " + doc.get("content", "")[:1000] for doc in docs]
-    return get_embeddings(texts)
-
-
-def compute_similarity(embeddings: list[list[float]]) -> list[list[float]]:
-    """计算相似度矩阵"""
-    return embedding_similarity_matrix(embeddings).tolist()
-
-
-def cluster_docs(
-    similarity_matrix: list[list[float]],
-    threshold: float = 0.5,
-) -> list[list[int]]:
-    """根据相似度阈值分组"""
-    n = len(similarity_matrix)
-    visited = [False] * n
-    clusters = []
-
-    for i in range(n):
-        if visited[i]:
-            continue
-
-        cluster = [i]
-        visited[i] = True
-
-        for j in range(i + 1, n):
-            if not visited[j] and similarity_matrix[i][j] > threshold:
-                cluster.append(j)
-                visited[j] = True
-
-        if len(cluster) > 1:
-            clusters.append(cluster)
-
-    return clusters
-
-
-def extract_triplets(docs_texts: list[dict[str, str]]) -> str:
-    """使用 LLM 提取知识图谱三元组"""
-    combined = "\n\n".join(
-        [
-            f"标题: {d['title']}\n分类: {d['category']}\n内容: {d['content'][:800]}"
-            for d in docs_texts[:8]
-        ]
-    )
-
-    prompt = f"""从以下知识库文档中提取知识图谱三元组。
-要求：
-1. 提取实体和它们之间的关系
-2. 关系用动词或介词短语表示
-3. 只提取核心知识，忽略描述性内容
-
-文档内容：
-{combined}
-
-请以以下TTL格式输出（只输出TTL，不要其他内容）：
-@prefix kb: <http://example.org/knowledge/> .
-@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-
-kb:实体1 rdfs:label "实体1" .
-kb:实体2 rdfs:label "实体2" .
-kb:实体1 kb:关系 kb:实体2 .
-"""
-
-    return llm_chat_str(prompt, temperature=0.3)
-
-
-def evaluate_ttl_quality(ttl_content: str, docs_titles: list[str]) -> dict[str, Any]:
-    """评估 TTL 知识图谱质量"""
-    prompt = f"""请评估以下知识图谱的质量。
-
-注意：此知识库用于探索性知识工程。
-- 目标是发现模糊、建立关联、帮助探究
-- 不应追求完整性、准确性、闭合答案
-- 相反，应欣赏开放性关联、跨领域连接、启发性假设
-
-知识图谱TTL内容：
-{ttl_content}
-
-相关文档标题：{docs_titles}
-
-请从以下维度评估并输出JSON格式结果：
-{{
-    "novel_connections": 0-100,  // 新颖连接：是否发现了非常规的跨领域关联
-    "provocativeness": 0-100,     // 启发性：是否能激发进一步探究和思考
-    "fuzziness_tolerance": 0-100, // 模糊容忍：是否能接受不完整、不确定的关联
-    "issues": ["问题1"],         // 发现的实际问题（语法错误等）
-    "suggestions": ["建议1"]      // 改进建议
-}}
-
-只输出JSON，不要其他内容。
-"""
-
-    result = llm_json_request(prompt)
-    if not result:
-        return {"error": "评估失败"}
-    return result
-
-
-def summarize_content(docs: list[dict[str, Any]]) -> str:
-    """使用 LLM 生成内容介绍"""
-    sample_docs = docs[:10]
-    combined = "\n\n".join(
-        [
-            f"标题: {d.get('title', '')}\n分类: {d.get('category', '')}\n内容: {d.get('content', '')[:500]}"
-            for d in sample_docs
-        ]
-    )
-
-    prompt = f"""请为以下知识库内容生成一个简洁的介绍（200字以内）。
-
-知识库内容：
-{combined}
-
-请直接输出介绍内容，不要其他格式。
-"""
-
-    return llm_chat_str(prompt, temperature=0.3)
-
-
-def evaluate_content_quality(docs: list[dict[str, Any]]) -> dict[str, Any]:
-    """评估知识库内容质量"""
-    sample_docs = docs[:8]
-    combined = "\n\n".join(
-        [
-            f"标题: {d.get('title', '')}\n分类: {d.get('category', '')}\n内容: {d.get('content', '')[:600]}"
-            for d in sample_docs
-        ]
-    )
-
-    prompt = f"""请评估以下知识库内容的质量。
-
-注意：此知识库是智能体训练的原始素材，用于探索性的知识工程。
-- 目标是发现模糊、帮助人类找到探究方式
-- 相比于传统的知识工程（追求完整、准确、闭合），我们更欣赏探索性、开放性、启发性
-- 不应以"缺乏完整性"、"缺乏准确性"、"缺乏标准分类"为由扣分
-- 相反，应该鼓励模糊性、开放性问题、未完成的思考、多样视角
-
-知识库内容：
-{combined}
-
-请从以下维度评估并输出JSON格式结果：
-{{
-    "exploratory": 0-100,   // 探索性：是否包含开放性问题、未完成的思考、启发性观点
-    "curiosity": 0-100,     // 好奇心：是否能激发探究欲望，引发进一步思考
-    "unconventional": 0-100, // 非传统性：是否跳出常规思维，有独特视角
-    "inspiration": 0-100,   // 灵感激发：是否能给人带来灵感或新视角
-    "issues": ["问题1"],    // 发现的实际问题（仅限真正影响智能体训练的问题）
-    "suggestions": ["建议1"] // 改进建议（仅限有价值的建议）
-}}
-
-只输出JSON，不要其他内容。
-"""
-
-    result = llm_json_request(prompt)
-    if not result:
-        return {"error": "评估失败"}
-    return result
-
-
-def generate_report(
-    total_docs: int,
-    clusters: list[dict[str, Any]],
-    ttl_file: Path,
-    quality_results: list[dict[str, Any]],
-    output_dir: Path,
-    docs: list[dict[str, Any]] | None = None,
-    content_intro: str | None = None,
-    content_quality: dict[str, Any] | None = None,
-    similarity_threshold: float = 0.5,
-    enable_quality_check: bool = True,
-) -> dict[str, Any]:
-    """生成分析报告"""
-    avg_novel_connections = (
-        sum(q.get("novel_connections", 0) for q in quality_results)
-        / len(quality_results)
-        if quality_results
-        else 0
-    )
-    avg_provocativeness = (
-        sum(q.get("provocativeness", 0) for q in quality_results) / len(quality_results)
-        if quality_results
-        else 0
-    )
-    avg_fuzziness_tolerance = (
-        sum(q.get("fuzziness_tolerance", 0) for q in quality_results)
-        / len(quality_results)
-        if quality_results
-        else 0
-    )
-
-    report = {
-        "generated_at": datetime.now().isoformat(),
-        "total_docs": total_docs,
-        "total_clusters": len(clusters),
-    }
-
-    md_report = [
-        "# 知识库分析报告",
-        "",
-        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **文档总数**: {total_docs}",
-        f"- **发现分组数**: {len(clusters)}",
-        "",
-    ]
-
-    if content_intro:
-        md_report.extend(
-            [
-                "## 内容介绍",
-                "",
-                content_intro,
-                "",
-            ]
-        )
-
-    for cluster in clusters:
-        cid = cluster["cluster_id"]
-        md_report.extend(
-            [
-                f"## 分组 {cid}: {cluster['doc_count']} 篇文档",
-                "",
-                "**文档标题:**",
-            ]
-        )
-        for item in cluster["titles"]:
-            md_report.append(
-                f"- [{item['title']}]({item['path']}) ({item['category']})"
-            )
-        md_report.extend(
-            [
-                "",
-                "**关键词:**",
-                ", ".join(cluster.get("keywords", [])[:10]),
-                "",
-                "---",
-                "",
-            ]
-        )
-
-    md_report.append(f"*知识图谱已保存至: {ttl_file.name}*")
-
-    with open(output_dir / "报告.md", "w", encoding="utf-8") as f:
-        f.write("\n".join(md_report))
-
-    md_eval = [
-        "# 知识库分析评估",
-        "",
-        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **文档总数**: {total_docs}",
-        f"- **发现分组数**: {len(clusters)}",
-        "",
-    ]
-
-    if content_quality and not content_quality.get("error"):
-        md_eval.extend(
-            [
-                "## 内容质量评估",
-                "",
-                "此知识库用于探索性知识工程，目标是发现模糊、帮助人类找到探究方式。",
-                "",
-                f"| 维度 | 分数 |",
-                f"| --- | --- |",
-                f"| 探索性 (Exploratory) | {content_quality.get('exploratory', '-')} |",
-                f"| 好奇心 (Curiosity) | {content_quality.get('curiosity', '-')} |",
-                f"| 非传统性 (Unconventional) | {content_quality.get('unconventional', '-')} |",
-                f"| 灵感激发 (Inspiration) | {content_quality.get('inspiration', '-')} |",
-                "",
-            ]
-        )
-        if content_quality.get("issues"):
-            md_eval.append("**问题:**")
-            for issue in content_quality.get("issues", []):
-                md_eval.append(f"- {issue}")
-            md_eval.append("")
-        if content_quality.get("suggestions"):
-            md_eval.append("**改进建议:**")
-            for suggestion in content_quality.get("suggestions", []):
-                md_eval.append(f"- {suggestion}")
-            md_eval.append("")
-
-    md_eval.extend(
-        [
-            "## 知识图谱质量评估",
-            "",
-            "目标是发现模糊、建立关联、帮助探究。",
-            "",
-            f"| 维度 | 分数 |",
-            f"| --- | --- |",
-            f"| 新颖连接 (Novel Connections) | {avg_novel_connections:.1f} |",
-            f"| 启发性 (Provocativeness) | {avg_provocativeness:.1f} |",
-            f"| 模糊容忍 (Fuzziness Tolerance) | {avg_fuzziness_tolerance:.1f} |",
-            "",
-        ]
-    )
-
-    for cluster in clusters:
-        cid = cluster["cluster_id"]
-        quality = cluster.get("quality", {})
-        if quality and not quality.get("error"):
-            md_eval.extend(
-                [
-                    f"### 分组 {cid} 知识图谱评估",
-                    "",
-                    f"- 新颖连接: {quality.get('novel_connections', '-')}",
-                    f"- 启发性: {quality.get('provocativeness', '-')}",
-                    f"- 模糊容忍: {quality.get('fuzziness_tolerance', '-')}",
-                    "",
-                ]
-            )
-            if quality.get("issues"):
-                md_eval.append("**问题:**")
-                for issue in quality.get("issues", []):
-                    md_eval.append(f"- {issue}")
-                md_eval.append("")
-            if quality.get("suggestions"):
-                md_eval.append("**改进建议:**")
-                for suggestion in quality.get("suggestions", []):
-                    md_eval.append(f"- {suggestion}")
-                md_eval.append("")
-
-    with open(output_dir / "评估.md", "w", encoding="utf-8") as f:
-        f.write("\n".join(md_eval))
-
-    md_review = [
-        "# 知识库分析复盘",
-        "",
-        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **文档总数**: {total_docs}",
-        f"- **发现分组数**: {len(clusters)}",
-        "",
-        "## 算法流程",
-        "",
-        "1. **文档扫描**: 扫描知识库目录，加载所有 Markdown 文件",
-        "2. **语义嵌入**: 使用 OpenAI Embedding API 获取文本语义向量",
-        "3. **相似度计算**: 使用余弦相似度计算文档之间的相似度",
-        "4. **分组聚类**: 基于相似度阈值(0.5)进行聚类",
-        "5. **知识抽取**: 使用 LLM 提取知识图谱三元组",
-        "6. **质量评估**: 使用 LLM 评估知识图谱质量",
-        "",
-        "## 参数配置",
-        "",
-        f"- 相似度阈值: {similarity_threshold}",
-        f"- 质量评估: {'启用' if enable_quality_check else '禁用'}",
-        "",
-    ]
-
-    with open(output_dir / "复盘.md", "w", encoding="utf-8") as f:
-        f.write("\n".join(md_review))
-
-    return report
-
-
 def run_profile_activity(
     data_dir: Path | None = None,
     output_dir: Path | None = None,
     similarity_threshold: float = 0.5,
     enable_quality_check: bool = True,
 ) -> dict[str, Any]:
-    """运行知识发现活动
-
-    Args:
-        data_dir: 知识库数据目录
-        output_dir: 输出目录
-        similarity_threshold: 相似度阈值
-        enable_quality_check: 是否启用质量评估
-    """
+    """运行知识发现活动"""
     if data_dir is None:
         data_dir = (
             Path(__file__).parent.parent.parent.parent / "data" / "infra" / "github"
@@ -471,10 +105,11 @@ def run_profile_activity(
     print(f"加载了 {len(docs)} 篇文档")
 
     print("计算语义嵌入向量...")
-    embeddings = compute_embeddings(docs)
+    texts = [d.get("title", "") + " " + d.get("content", "")[:1000] for d in docs]
+    embeddings = get_embeddings(texts)
     print(f"计算了 {len(embeddings)} 个嵌入向量")
 
-    similarity_matrix = compute_similarity(embeddings)
+    similarity_matrix = embedding_similarity_matrix(embeddings).tolist()
 
     vector_data = {
         "docs": [
@@ -493,8 +128,8 @@ def run_profile_activity(
         json.dump(vector_data, f, ensure_ascii=False)
     print(f"向量数据已保存到: {vector_file}")
 
-    clusters = cluster_docs(similarity_matrix, threshold=similarity_threshold)
-    print(f"发现 {len(clusters)} 个分组")
+    clusters_indices = cluster_notes(similarity_matrix, similarity_threshold)
+    print(f"发现 {len(clusters_indices)} 个分组")
 
     ttl_lines = [
         "@prefix kb: <http://example.org/knowledge/> .",
@@ -505,7 +140,7 @@ def run_profile_activity(
     cluster_results = []
     quality_results = []
 
-    for idx, cluster in enumerate(clusters):
+    for idx, cluster in enumerate(clusters_indices):
         cluster_docs_list = [docs[i] for i in cluster]
         titles = [
             {
@@ -518,22 +153,33 @@ def run_profile_activity(
 
         print(f"  处理 Cluster {idx + 1} ({len(cluster)} docs)...")
 
-        ttl_triplets = extract_triplets(cluster_docs_list)
+        ttl = llm_extract_triplets(
+            cluster_docs_list,
+            lambda d: f"标题: {d.get('title', '')}\n分类: {d.get('category', '')}\n内容: {d.get('content', '')[:800]}",
+            max_items=8,
+            max_content=800,
+        )
 
         ttl_lines.append(f"# Cluster {idx + 1}: {len(cluster)} related docs")
-        ttl_lines.append(ttl_triplets)
+        ttl_lines.append(ttl)
         ttl_lines.append("")
 
         quality = {}
-        if enable_quality_check and ttl_triplets:
+        if enable_quality_check and ttl:
             print(f"    评估质量...")
-            quality = evaluate_ttl_quality(ttl_triplets, [t["title"] for t in titles])
-            quality_results.append(
+            quality = llm_evaluate_ttl(
+                ttl,
+                [t["title"] for t in titles],
                 {
-                    "cluster_id": idx + 1,
-                    **quality,
-                }
+                    "novel_connections": "新颖连接：是否发现了非常规的跨领域关联",
+                    "provocativeness": "启发性：是否能激发进一步探究和思考",
+                    "fuzziness_tolerance": "模糊容忍：是否能接受不完整、不确定的关联",
+                    "issues": "发现的问题",
+                    "suggestions": "改进建议",
+                },
+                context="注意：此知识库用于探索性知识工程。目标是发现模糊、建立关联、帮助探究。",
             )
+            quality_results.append({"cluster_id": idx + 1, **quality})
 
         cluster_results.append(
             {
@@ -551,25 +197,74 @@ def run_profile_activity(
     print(f"知识图谱已保存到: {ttl_file}")
 
     print("生成内容介绍...")
-    content_intro = summarize_content(docs)
+    content_intro = llm_summarize_content(
+        docs,
+        lambda d: f"标题: {d.get('title', '')}\n分类: {d.get('category', '')}\n内容: {d.get('content', '')[:500]}",
+        max_items=10,
+        max_content=500,
+        max_length=200,
+    )
 
     print("评估内容质量...")
     content_quality = {}
     if enable_quality_check:
-        content_quality = evaluate_content_quality(docs)
+        content_quality = llm_evaluate_content(
+            docs,
+            lambda d: f"标题: {d.get('title', '')}\n分类: {d.get('category', '')}\n内容: {d.get('content', '')[:600]}",
+            {
+                "exploratory": "探索性：是否包含开放性问题、未完成的思考、启发性观点",
+                "curiosity": "好奇心：是否能激发探究欲望，引发进一步思考",
+                "unconventional": "非传统性：是否跳出常规思维，有独特视角",
+                "inspiration": "灵感激发：是否能给人带来灵感或新视角",
+                "issues": "发现的问题",
+                "suggestions": "改进建议",
+            },
+            max_items=8,
+            max_content=600,
+        )
+
+    quality_template = {
+        "novel_connections": ("新颖连接", "novel_connections"),
+        "provocativeness": ("启发性", "provocativeness"),
+        "fuzziness_tolerance": ("模糊容忍", "fuzziness_tolerance"),
+    }
 
     report = generate_report(
-        len(docs),
-        cluster_results,
-        ttl_file,
-        quality_results,
-        output_dir,
-        docs=docs,
+        total_items=len(docs),
+        clusters=cluster_results,
+        ttl_file=ttl_file,
+        quality_results=quality_results,
+        output_dir=output_dir,
+        title="知识库分析报告",
         content_intro=content_intro,
         content_quality=content_quality,
-        similarity_threshold=similarity_threshold,
-        enable_quality_check=enable_quality_check,
+        quality_template=quality_template,
+        item_label="篇文档",
+        cluster_label="分组",
     )
+
+    with open(output_dir / "复盘.md", "w", encoding="utf-8") as f:
+        f.write(f"""# 知识库分析复盘
+
+- **生成时间**: {report["generated_at"]}
+- **文档总数**: {len(docs)}
+- **发现分组数**: {len(clusters_indices)}
+
+## 算法流程
+
+1. **文档扫描**: 扫描知识库目录，加载所有 Markdown 文件
+2. **语义嵌入**: 使用 OpenAI Embedding API 获取文本语义向量
+3. **相似度计算**: 使用余弦相似度计算文档之间的相似度
+4. **分组聚类**: 基于相似度阈值({similarity_threshold})进行聚类
+5. **知识抽取**: 使用 LLM 提取知识图谱三元组
+6. **质量评估**: 使用 LLM 评估知识图谱质量
+
+## 参数配置
+
+- 相似度阈值: {similarity_threshold}
+- 质量评估: {"启用" if enable_quality_check else "禁用"}
+""")
+
     print(f"分析报告已保存到: {output_dir / '报告.md'}")
 
     return report

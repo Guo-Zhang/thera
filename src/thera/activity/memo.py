@@ -14,322 +14,24 @@
 """
 
 import json
-from collections import Counter
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from thera.config import settings
 from thera.domain.knowl import (
+    cluster_notes,
     embedding_similarity_matrix,
-    get_embedding,
+    extract_keywords,
+    generate_report,
     get_embeddings,
 )
 from thera.infra.llm import (
     chat_str as llm_chat_str,
+    evaluate_content_quality as llm_evaluate_content,
+    evaluate_ttl_quality as llm_evaluate_ttl,
+    extract_triplets as llm_extract_triplets,
     json_request as llm_json_request,
-    _parse_json as _parse_json_response,
+    summarize_content as llm_summarize_content,
 )
-
-
-def compute_embeddings(notes: list[dict[str, Any]]) -> list[list[float]]:
-    """计算笔记的语义嵌入向量"""
-    texts = [
-        note.get("title", "") + " " + note.get("body", "")[:1000] for note in notes
-    ]
-    return get_embeddings(texts).tolist()
-
-
-def compute_similarity(embeddings: list[list[float]]) -> list[list[float]]:
-    """计算相似度矩阵"""
-    return embedding_similarity_matrix(embeddings).tolist()
-
-
-def cluster_notes(
-    similarity_matrix: list[list[float]],
-    threshold: float = 0.5,
-) -> list[list[int]]:
-    """根据相似度阈值分组"""
-    n = len(similarity_matrix)
-    visited = [False] * n
-    clusters = []
-
-    for i in range(n):
-        if visited[i]:
-            continue
-
-        cluster = [i]
-        visited[i] = True
-
-        for j in range(i + 1, n):
-            if not visited[j] and similarity_matrix[i][j] > threshold:
-                cluster.append(j)
-                visited[j] = True
-
-        if len(cluster) > 1:
-            clusters.append(cluster)
-
-    return clusters
-
-
-def extract_triplets(notes_texts: list[dict[str, str]]) -> str:
-    """使用 LLM 提取知识图谱三元组"""
-    combined = "\n\n".join(
-        [f"标题: {n['title']}\n内容: {n['body'][:800]}" for n in notes_texts[:8]]
-    )
-
-    prompt = f"""从以下备忘录文本中提取知识图谱三元组。
-要求：
-1. 提取实体和它们之间的关系
-2. 关系用动词或介词短语表示
-3. 只提取核心知识，忽略描述性内容
-
-备忘录内容：
-{combined}
-
-请以以下TTL格式输出（只输出TTL，不要其他内容）：
-@prefix kb: <http://example.org/knowledge/> .
-@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-
-kb:实体1 rdfs:label "实体1" .
-kb:实体2 rdfs:label "实体2" .
-kb:实体1 kb:关系 kb:实体2 .
-"""
-
-    return llm_chat_str(prompt, temperature=0.3)
-
-
-def evaluate_ttl_quality(ttl_content: str, notes_titles: list[str]) -> dict[str, Any]:
-    """评估 TTL 知识图谱质量"""
-    prompt = f"""请评估以下知识图谱的质量。
-
-知识图谱TTL内容：
-{ttl_content}
-
-相关笔记标题：{notes_titles}
-
-请从以下维度评估并输出JSON格式结果：
-{{
-    "completeness": 0-100,  // 完整性：是否覆盖了笔记的核心知识
-    "accuracy": 0-100,       // 准确性：实体和关系是否正确
-    "coherence": 0-100,      // 连贯性：知识之间是否形成有意义的关联
-    "issues": ["问题1", "问题2"],  // 发现的问题
-    "suggestions": ["建议1", "建议2"]  // 改进建议
-}}
-
-只输出JSON，不要其他内容。
-"""
-
-    result = llm_json_request(prompt)
-    if not result:
-        return {"error": "评估失败"}
-    return result
-
-
-def summarize_content(notes: list[dict[str, Any]]) -> str:
-    """使用 LLM 生成内容介绍"""
-    sample_notes = notes[:10]
-    combined = "\n\n".join(
-        [
-            f"标题: {n.get('title', '')}\n内容: {n.get('body', '')[:500]}"
-            for n in sample_notes
-        ]
-    )
-
-    prompt = f"""请为以下备忘录内容生成一个简洁的介绍（200字以内）。
-
-备忘录内容：
-{combined}
-
-请直接输出介绍内容，不要其他格式。
-"""
-
-    return llm_chat_str(prompt, temperature=0.3)
-
-
-def evaluate_content_quality(notes: list[dict[str, Any]]) -> dict[str, Any]:
-    """评估备忘录内容质量"""
-    sample_notes = notes[:8]
-    combined = "\n\n".join(
-        [
-            f"标题: {n.get('title', '')}\n内容: {n.get('body', '')[:600]}"
-            for n in sample_notes
-        ]
-    )
-
-    prompt = f"""请评估以下备忘录内容的质量。
-
-备忘录内容：
-{combined}
-
-请从以下维度评估并输出JSON格式结果：
-{{
-    "completeness": 0-100,  // 完整性：内容是否完整，有无断节
-    "clarity": 0-100,       // 清晰度：表达是否清晰，逻辑是否连贯
-    "value": 0-100,         // 价值性：内容是否有深度见解和实用价值
-    "organization": 0-100,  // 组织性：标题和分类是否合理
-    "issues": ["问题1", "问题2"],  // 发现的问题
-    "suggestions": ["建议1", "建议2"]  // 改进建议
-}}
-
-只输出JSON，不要其他内容。
-"""
-
-    result = llm_json_request(prompt)
-    if not result:
-        return {"error": "评估失败"}
-    return result
-
-
-def generate_report(
-    total_notes: int,
-    clusters: list[dict[str, Any]],
-    ttl_file: Path,
-    quality_results: list[dict[str, Any]],
-    output_dir: Path,
-    notes: list[dict[str, Any]] | None = None,
-    content_intro: str | None = None,
-    content_quality: dict[str, Any] | None = None,
-    similarity_threshold: float = 0.5,
-    enable_quality_check: bool = True,
-) -> dict[str, Any]:
-    """生成分析报告"""
-    avg_completeness = (
-        sum(q.get("completeness", 0) for q in quality_results) / len(quality_results)
-        if quality_results
-        else 0
-    )
-    avg_accuracy = (
-        sum(q.get("accuracy", 0) for q in quality_results) / len(quality_results)
-        if quality_results
-        else 0
-    )
-    avg_coherence = (
-        sum(q.get("coherence", 0) for q in quality_results) / len(quality_results)
-        if quality_results
-        else 0
-    )
-
-    report = {
-        "generated_at": datetime.now().isoformat(),
-        "total_notes": total_notes,
-        "total_clusters": len(clusters),
-    }
-
-    md_report = [
-        "# 备忘录分析报告",
-        "",
-        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **备忘录总数**: {total_notes}",
-        f"- **发现分组数**: {len(clusters)}",
-        "",
-    ]
-
-    if content_intro:
-        md_report.extend(
-            [
-                "## 内容介绍",
-                "",
-                content_intro,
-                "",
-            ]
-        )
-
-    for cluster in clusters:
-        cid = cluster["cluster_id"]
-        md_report.extend(
-            [
-                f"## 分组 {cid}: {cluster['note_count']} 条笔记",
-                "",
-                "**笔记标题:**",
-            ]
-        )
-        for title in cluster["titles"]:
-            md_report.append(f"- {title}")
-        md_report.extend(
-            [
-                "",
-                "**关键词:**",
-                ", ".join(cluster.get("keywords", [])[:10]),
-                "",
-                "---",
-                "",
-            ]
-        )
-
-    md_report.append(f"*知识图谱已保存至: {ttl_file.name}*")
-
-    with open(output_dir / "报告.md", "w", encoding="utf-8") as f:
-        f.write("\n".join(md_report))
-
-    md_eval = [
-        "# 备忘录分析评估",
-        "",
-        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **备忘录总数**: {total_notes}",
-        f"- **发现分组数**: {len(clusters)}",
-        "",
-    ]
-
-    if content_quality and not content_quality.get("error"):
-        md_eval.extend(
-            [
-                "## 内容质量评估",
-                "",
-                f"| 维度 | 分数 |",
-                f"| --- | --- |",
-                f"| 完整性 (Completeness) | {content_quality.get('completeness', '-')} |",
-                f"| 清晰度 (Clarity) | {content_quality.get('clarity', '-')} |",
-                f"| 价值性 (Value) | {content_quality.get('value', '-')} |",
-                f"| 组织性 (Organization) | {content_quality.get('organization', '-')} |",
-                "",
-            ]
-        )
-        if content_quality.get("issues"):
-            md_eval.append("**问题:**")
-            for issue in content_quality.get("issues", []):
-                md_eval.append(f"- {issue}")
-            md_eval.append("")
-        if content_quality.get("suggestions"):
-            md_eval.append("**改进建议:**")
-            for suggestion in content_quality.get("suggestions", []):
-                md_eval.append(f"- {suggestion}")
-            md_eval.append("")
-
-    md_eval.extend(
-        [
-            "## 知识图谱质量评估",
-            "",
-            f"| 维度 | 分数 |",
-            f"| --- | --- |",
-            f"| 完整性 (Completeness) | {avg_completeness:.1f} |",
-            f"| 准确性 (Accuracy) | {avg_accuracy:.1f} |",
-            f"| 连贯性 (Coherence) | {avg_coherence:.1f} |",
-            "",
-        ]
-    )
-
-    for cluster in clusters:
-        cid = cluster["cluster_id"]
-        quality = cluster.get("quality", {})
-        if quality and not quality.get("error"):
-            md_eval.extend(
-                [
-                    f"### 分组 {cid} 质量",
-                    "",
-                    f"| 维度 | 分数 |",
-                    f"| --- | --- |",
-                    f"| 完整性 | {quality.get('completeness', '-')} |",
-                    f"| 准确性 | {quality.get('accuracy', '-')} |",
-                    f"| 连贯性 | {quality.get('coherence', '-')} |",
-                    "",
-                ]
-            )
-
-    with open(output_dir / "评估.md", "w", encoding="utf-8") as f:
-        f.write("\n".join(md_eval))
-
-    return report
 
 
 def run_memo_activity(
@@ -346,10 +48,11 @@ def run_memo_activity(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"正在计算 {len(notes)} 条备忘录的嵌入...")
-    embeddings = compute_embeddings(notes)
+    texts = [n.get("title", "") + " " + n.get("body", "")[:1000] for n in notes]
+    embeddings = get_embeddings(texts)
 
     print("正在计算相似度矩阵...")
-    similarity_matrix = compute_similarity(embeddings)
+    similarity_matrix = embedding_similarity_matrix(embeddings).tolist()
 
     print(f"正在分组 (阈值: {similarity_threshold})...")
     clusters_indices = cluster_notes(similarity_matrix, similarity_threshold)
@@ -363,26 +66,56 @@ def run_memo_activity(
 
     if enable_quality_check:
         print("正在生成内容介绍...")
-        content_intro = summarize_content(notes)
+        content_intro = llm_summarize_content(
+            notes,
+            lambda n: f"标题: {n.get('title', '')}\n内容: {n.get('body', '')[:500]}",
+            max_items=10,
+            max_content=500,
+            max_length=200,
+        )
 
         print("正在评估内容质量...")
-        content_quality = evaluate_content_quality(notes)
+        content_quality = llm_evaluate_content(
+            notes,
+            lambda n: f"标题: {n.get('title', '')}\n内容: {n.get('body', '')[:600]}",
+            {
+                "completeness": "完整性：内容是否完整，有无断节",
+                "clarity": "清晰度：表达是否清晰，逻辑是否连贯",
+                "value": "价值性：内容是否有深度见解和实用价值",
+                "organization": "组织性：标题和分类是否合理",
+                "issues": "发现的问题",
+                "suggestions": "改进建议",
+            },
+            max_items=8,
+            max_content=600,
+        )
 
-        cluster_notes_for_ttl = [
-            [notes[i] for i in cluster] for cluster in clusters_indices[:3]
-        ]
-
-        for cluster_idx, cluster_note_list in enumerate(cluster_notes_for_ttl):
-            if not cluster_note_list:
+        for idx, cluster in enumerate(clusters_indices[:3]):
+            cluster_notes_list = [notes[i] for i in cluster]
+            if not cluster_notes_list:
                 continue
 
-            ttl = extract_triplets(cluster_note_list)
-            ttl_content += f"\n# Cluster {cluster_idx + 1}\n{ttl}"
+            ttl = llm_extract_triplets(
+                cluster_notes_list,
+                lambda n: f"标题: {n.get('title', '')}\n内容: {n.get('body', '')[:800]}",
+                max_items=8,
+                max_content=800,
+            )
+            ttl_content += f"\n# Cluster {idx + 1}\n{ttl}"
 
-            if enable_quality_check:
-                titles = [n.get("title", "") for n in cluster_note_list]
-                quality = evaluate_ttl_quality(ttl, titles)
-                quality_results.append(quality)
+            titles = [n.get("title", "") for n in cluster_notes_list]
+            quality = llm_evaluate_ttl(
+                ttl,
+                titles,
+                {
+                    "completeness": "完整性：是否覆盖了笔记的核心知识",
+                    "accuracy": "准确性：实体和关系是否正确",
+                    "coherence": "连贯性：知识之间是否形成有意义的关联",
+                    "issues": "发现的问题",
+                    "suggestions": "改进建议",
+                },
+            )
+            quality_results.append(quality)
 
     ttl_file = output_dir / "knowledge.ttl"
     with open(ttl_file, "w", encoding="utf-8") as f:
@@ -392,7 +125,7 @@ def run_memo_activity(
         cluster_notes_list = [notes[i] for i in cluster_indices]
         titles = [n.get("title", "") for n in cluster_notes_list]
         bodies = [n.get("body", "") for n in cluster_notes_list]
-        keywords = _extract_keywords(" ".join(bodies))
+        keywords = extract_keywords(" ".join(bodies).split())
 
         cluster_quality = quality_results[idx] if idx < len(quality_results) else {}
 
@@ -406,16 +139,24 @@ def run_memo_activity(
             }
         )
 
+    quality_template = {
+        "completeness": ("完整性", "completeness"),
+        "accuracy": ("准确性", "accuracy"),
+        "coherence": ("连贯性", "coherence"),
+    }
+
     report = generate_report(
-        total_notes=len(notes),
+        total_items=len(notes),
         clusters=clusters,
         ttl_file=ttl_file,
         quality_results=quality_results,
         output_dir=output_dir,
+        title="备忘录分析报告",
         content_intro=content_intro,
         content_quality=content_quality,
-        similarity_threshold=similarity_threshold,
-        enable_quality_check=enable_quality_check,
+        quality_template=quality_template,
+        item_label="条笔记",
+        cluster_label="分组",
     )
 
     report["clusters"] = clusters
@@ -428,15 +169,6 @@ def load_notes(notes_file: Path) -> list[dict[str, Any]]:
     """加载备忘录数据"""
     with open(notes_file, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def _extract_keywords(text: str) -> list[str]:
-    """提取关键词"""
-    import re
-
-    words = re.findall(r"[\w]{2,}", text)
-    counter = Counter(words)
-    return [word for word, _ in counter.most_common(20)]
 
 
 def compute_cluster_centroids(
@@ -551,7 +283,6 @@ def deduplicate_entities(ttl_content: str) -> dict[str, Any]:
 
 只输出JSON。
 """
-
     return llm_json_request(prompt)
 
 
@@ -572,7 +303,6 @@ def classify_and_draft_note(note: dict[str, Any]) -> dict[str, Any]:
 
 只输出JSON。
 """
-
     result = llm_json_request(prompt)
     if not result:
         return {"error": "分类失败"}
@@ -594,19 +324,18 @@ def analyze_development_direction(
     notes: list[dict[str, Any]], clusters: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """分析备忘录的发展方向"""
-    category_prompt = f"""请分析以下备忘录集合的发展方向和趋势。
+    prompt = f"""请分析以下备忘录集合的发展方向和趋势。
 
 备忘录总数: {len(notes)}
 分组数: {len(clusters)}
 
 """
-
     if clusters:
-        category_prompt += "各分组概述:\n"
+        prompt += "各分组概述:\n"
         for cluster in clusters[:5]:
-            category_prompt += f"- 分组 {cluster['cluster_id']}: {cluster.get('note_count', 0)} 条笔记\n"
+            prompt += f"- 分组 {cluster['cluster_id']}: {cluster.get('note_count', 0)} 条笔记\n"
 
-    category_prompt += """
+    prompt += """
 请输出JSON格式结果：
 {
     "main_themes": ["主题1", "主题2"],
@@ -617,8 +346,7 @@ def analyze_development_direction(
 
 只输出JSON。
 """
-
-    result = llm_json_request(category_prompt)
+    result = llm_json_request(prompt)
     if not result:
         return {"error": "分析失败"}
     return result
@@ -630,6 +358,8 @@ def generate_reasoning_report(
     output_dir: Path,
 ) -> str:
     """生成推理报告"""
+    from datetime import datetime
+
     md = [
         "# 备忘录发展方向推理报告",
         "",
@@ -639,45 +369,25 @@ def generate_reasoning_report(
     ]
 
     if direction_analysis.get("main_themes"):
-        md.extend(
-            [
-                "## 主要主题",
-                "",
-            ]
-        )
+        md.extend(["## 主要主题", ""])
         for theme in direction_analysis["main_themes"]:
             md.append(f"- {theme}")
         md.append("")
 
     if direction_analysis.get("development_trends"):
-        md.extend(
-            [
-                "## 发展趋势",
-                "",
-            ]
-        )
+        md.extend(["## 发展趋势", ""])
         for trend in direction_analysis["development_trends"]:
             md.append(f"- {trend}")
         md.append("")
 
     if direction_analysis.get("key_insights"):
-        md.extend(
-            [
-                "## 关键洞察",
-                "",
-            ]
-        )
+        md.extend(["## 关键洞察", ""])
         for insight in direction_analysis["key_insights"]:
             md.append(f"- {insight}")
         md.append("")
 
     if direction_analysis.get("recommendations"):
-        md.extend(
-            [
-                "## 建议",
-                "",
-            ]
-        )
+        md.extend(["## 建议", ""])
         for rec in direction_analysis["recommendations"]:
             md.append(f"- {rec}")
         md.append("")

@@ -384,6 +384,147 @@ def export_html(markdown_path: Path, html_path: Path):
     html_path.write_text(html_content, encoding="utf-8")
 
 
+def cluster_notes(
+    similarity_matrix: list[list[float]],
+    threshold: float = 0.5,
+) -> list[list[int]]:
+    """根据相似度阈值分组"""
+    n = len(similarity_matrix)
+    visited = [False] * n
+    clusters = []
+
+    for i in range(n):
+        if visited[i]:
+            continue
+
+        cluster = [i]
+        visited[i] = True
+
+        for j in range(i + 1, n):
+            if not visited[j] and similarity_matrix[i][j] > threshold:
+                cluster.append(j)
+                visited[j] = True
+
+        if len(cluster) > 1:
+            clusters.append(cluster)
+
+    return clusters
+
+
+def extract_keywords(texts: list[str], top_n: int = 15) -> list[str]:
+    """提取关键词"""
+    import re
+    from collections import Counter
+
+    all_text = " ".join(texts)
+    words = re.findall(r"[\u4e00-\u9fa5]{2,4}", all_text)
+    counter = Counter(words)
+    return [w for w, _ in counter.most_common(top_n)]
+
+
+def generate_report(
+    total_items: int,
+    clusters: list[dict[str, Any]],
+    ttl_file: Path,
+    quality_results: list[dict[str, Any]],
+    output_dir: Path,
+    title: str = "分析报告",
+    content_intro: str | None = None,
+    content_quality: dict[str, Any] | None = None,
+    quality_template: dict[str, tuple[str, str]] | None = None,
+    item_label: str = "条目",
+    cluster_label: str = "分组",
+) -> dict[str, Any]:
+    """通用报告生成"""
+    import re
+    from collections import Counter
+    from datetime import datetime
+
+    avg_quality = {}
+    if quality_results and quality_template:
+        for key in quality_template.keys():
+            values = [q.get(key, 0) for q in quality_results if q.get(key)]
+            if values:
+                avg_quality[key] = sum(values) / len(values)
+
+    report = {
+        "generated_at": datetime.now().isoformat(),
+        "total_items": total_items,
+        "total_clusters": len(clusters),
+    }
+
+    md_report = [
+        f"# {title}",
+        "",
+        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- **条目总数**: {total_items}",
+        f"- **发现分组数**: {len(clusters)}",
+        "",
+    ]
+
+    if content_intro:
+        md_report.extend(["## 内容介绍", "", content_intro, ""])
+
+    for cluster in clusters:
+        cid = cluster["cluster_id"]
+        md_report.extend(
+            [
+                f"## {cluster_label} {cid}: {cluster.get('note_count', cluster.get('doc_count', len(cluster.get('indices', []))))} {item_label}",
+                "",
+                f"**标题:**",
+            ]
+        )
+        for title_item in cluster.get("titles", [])[:10]:
+            md_report.append(f"- {title_item}")
+        md_report.extend(
+            [
+                "",
+                "**关键词:**",
+                ", ".join(cluster.get("keywords", [])[:10]),
+                "",
+                "---",
+                "",
+            ]
+        )
+
+    md_report.append(f"*知识图谱已保存至: {ttl_file.name}*")
+
+    with open(output_dir / "报告.md", "w", encoding="utf-8") as f:
+        f.write("\n".join(md_report))
+
+    md_eval = [
+        f"# {title}评估",
+        "",
+        f"- **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- **条目总数**: {total_items}",
+        f"- **发现分组数**: {len(clusters)}",
+        "",
+    ]
+
+    if content_quality and not content_quality.get("error") and quality_template:
+        md_eval.extend(["## 内容质量评估", ""])
+        md_eval.append(f"| 维度 | 分数 |")
+        md_eval.append(f"| --- | --- |")
+        for key, (label, _) in quality_template.items():
+            md_eval.append(f"| {label} | {content_quality.get(key, '-')} |")
+        md_eval.append("")
+
+    if quality_template:
+        md_eval.extend(["## 知识图谱质量评估", ""])
+        md_eval.append(f"| 维度 | 分数 |")
+        md_eval.append(f"| --- | --- |")
+        for key, (label, _) in quality_template.items():
+            md_eval.append(
+                f"| {label} | {avg_quality.get(key, '-'):.1f if isinstance(avg_quality.get(key), (int, float)) else '-'} |"
+            )
+        md_eval.append("")
+
+    with open(output_dir / "评估.md", "w", encoding="utf-8") as f:
+        f.write("\n".join(md_eval))
+
+    return report
+
+
 class KnowlDomain(Domain):
     name = "knowl"
     description = "知识工程域 - 知识图谱、RAG"
