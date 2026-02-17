@@ -20,18 +20,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from openai import OpenAI
-
 from thera.config import settings
-from thera.domain.knowl import _parse_json_response, llm_json_request
+from thera.domain.knowl import (
+    _parse_json_response,
+    create_llm_client,
+    llm_json_request,
+)
 
 
-def create_llm_client() -> OpenAI:
-    """创建 LLM 客户端"""
-    return OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
-
-
-def get_embedding(text: str, client: OpenAI) -> list[float]:
+def get_embedding(text: str, client):
     """使用 OpenAI 获取文本嵌入"""
     response = client.embeddings.create(
         model=settings.llm_embedding_model,

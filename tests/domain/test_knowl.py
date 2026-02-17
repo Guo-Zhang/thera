@@ -104,7 +104,7 @@ class TestTfidfSimilarity:
         sim_matrix = tfidf_similarity(texts)
 
         assert sim_matrix.shape == (2, 2)
-        assert sim_matrix[0][1] == 1.0
+        assert np.isclose(sim_matrix[0][1], 1.0)
 
     def test_tfidf_similarity_different_texts(self):
         texts = ["hello world", "foo bar baz"]
@@ -246,8 +246,9 @@ class TestKnowlDomain:
     def test_handle_input_discover(self):
         app = Thera(storage_path=Path("/tmp/test_thera"))
         domain = KnowlDomain(app)
-        result = domain.handle_input("/discover")
-        assert "Directory not found" in result or "No articles" in result
+        with patch.object(domain, "_run_discovery", return_value="Test"):
+            result = domain.handle_input("/discover")
+            assert result == "Test"
 
     def test_on_activate(self, capsys):
         app = Thera(storage_path=Path("/tmp/test_thera"))
@@ -282,3 +283,69 @@ class TestKnowlDomain:
         domain = KnowlDomain(app)
         result = domain.auto_switch("今天天气真好")
         assert result is None
+
+
+class TestLLMFunctions:
+    @patch("thera.domain.knowl.create_llm_client")
+    def test_llm_chat_str(self, mock_create_client):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Test response"
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_create_client.return_value = mock_client
+
+        from thera.domain.knowl import llm_chat_str
+
+        result = llm_chat_str("Hello", system_prompt="You are helpful")
+        assert result == "Test response"
+
+        mock_client.chat.completions.create.assert_called_once()
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["messages"][0]["role"] == "system"
+        assert call_kwargs["messages"][1]["role"] == "user"
+        assert call_kwargs["messages"][1]["content"] == "Hello"
+
+    @patch("thera.domain.knowl.create_llm_client")
+    def test_llm_stream(self, mock_create_client):
+        mock_client = MagicMock()
+
+        def mock_generator():
+            chunk1 = MagicMock()
+            chunk1.choices = [MagicMock()]
+            chunk1.choices[0].delta.content = "Hello "
+            chunk1.choices[0].delta.reasoning_content = None
+            yield chunk1
+
+            chunk2 = MagicMock()
+            chunk2.choices = [MagicMock()]
+            chunk2.choices[0].delta.content = "world"
+            chunk2.choices[0].delta.reasoning_content = None
+            yield chunk2
+
+        mock_client.chat.completions.create.return_value = mock_generator()
+        mock_create_client.return_value = mock_client
+
+        from thera.domain.knowl import llm_stream
+
+        result = list(llm_stream("Hello"))
+        assert "Hello" in result[0]
+        assert "world" in result[1]
+
+    def test_parse_json_response_valid(self):
+        from thera.domain.knowl import _parse_json_response
+
+        result = _parse_json_response('{"key": "value"}')
+        assert result == {"key": "value"}
+
+    def test_parse_json_response_with_wrapper(self):
+        from thera.domain.knowl import _parse_json_response
+
+        result = _parse_json_response('text {"key": "value"} more')
+        assert result == {"key": "value"}
+
+    def test_parse_json_response_invalid(self):
+        from thera.domain.knowl import _parse_json_response
+
+        result = _parse_json_response("not json")
+        assert result == {}

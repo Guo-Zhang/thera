@@ -117,6 +117,59 @@ def keyword_similarity(text1: str, text2: str) -> float:
     return intersection / union
 
 
+def create_llm_client():
+    from openai import OpenAI
+
+    return OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+
+
+def llm_chat(
+    messages: list[dict[str, str]],
+    model: str | None = None,
+    temperature: float = 0.7,
+    stream: bool = False,
+):
+    client = create_llm_client()
+    return client.chat.completions.create(
+        model=model or settings.llm_model,
+        messages=messages,
+        temperature=temperature,
+        stream=stream,
+    )
+
+
+def llm_chat_str(
+    prompt: str,
+    system_prompt: str = "",
+    model: str | None = None,
+    temperature: float = 0.7,
+) -> str:
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    response = llm_chat(messages, model, temperature)
+    return response.choices[0].message.content or ""
+
+
+def llm_stream(prompt: str, system_prompt: str = ""):
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    response = llm_chat(messages, stream=True)
+    for chunk in response:
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if delta.content:
+            yield delta.content
+        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+            yield delta.reasoning_content
+
+
 def _parse_json_response(response: str) -> dict[str, Any]:
     try:
         return json.loads(response)
