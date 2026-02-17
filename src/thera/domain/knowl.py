@@ -514,9 +514,11 @@ def generate_report(
         md_eval.append(f"| 维度 | 分数 |")
         md_eval.append(f"| --- | --- |")
         for key, (label, _) in quality_template.items():
-            md_eval.append(
-                f"| {label} | {avg_quality.get(key, '-'):.1f if isinstance(avg_quality.get(key), (int, float)) else '-'} |"
-            )
+            val = avg_quality.get(key)
+            if isinstance(val, (int, float)):
+                md_eval.append(f"| {label} | {val:.1f} |")
+            else:
+                md_eval.append(f"| {label} | - |")
         md_eval.append("")
 
     with open(output_dir / "评估.md", "w", encoding="utf-8") as f:

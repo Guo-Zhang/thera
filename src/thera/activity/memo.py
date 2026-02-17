@@ -170,7 +170,10 @@ def run_memo_activity(
 def load_notes(notes_file: Path) -> list[dict[str, Any]]:
     """加载备忘录数据"""
     with open(notes_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    if isinstance(data, dict):
+        return data.get("notes", [])
+    return data
 
 
 def batch_classify_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
