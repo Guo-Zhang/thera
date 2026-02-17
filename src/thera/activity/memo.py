@@ -28,7 +28,7 @@ from thera.domain.knowl import (
 from thera.infra.llm import (
     chat_str as llm_chat_str,
     json_request as llm_json_request,
-    parse_json as _parse_json_response,
+    _parse_json as _parse_json_response,
 )
 
 

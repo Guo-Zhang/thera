@@ -21,23 +21,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from openai import OpenAI
-
 from thera.config import settings
+from thera.domain.knowl import (
+    embedding_similarity_matrix,
+    jaccard_similarity,
+    tfidf_similarity,
+)
+from thera.infra.llm import (
+    chat_str as llm_chat_str,
+    json_request as llm_json_request,
+    get_embeddings,
+)
 
 
-def create_llm_client() -> OpenAI:
-    """创建 LLM 客户端"""
-    return OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
-
-
-def get_embedding(text: str, client: OpenAI) -> list[float]:
-    """使用 OpenAI 获取文本嵌入"""
-    response = client.embeddings.create(
-        model=settings.llm_embedding_model,
-        input=text,
-    )
-    return response.data[0].embedding
+def extract_keywords(texts: list[str]) -> list[str]:
+    """提取关键词"""
+    all_text = " ".join(texts)
+    words = re.findall(r"[\u4e00-\u9fa5]{2,4}", all_text)
+    counter = Counter(words)
+    return [w for w, _ in counter.most_common(15)]
 
 
 def scan_knowledge_base(base_dir: Path) -> list[dict[str, Any]]:
@@ -89,43 +91,15 @@ def scan_knowledge_base(base_dir: Path) -> list[dict[str, Any]]:
     return docs
 
 
-def compute_embeddings(docs: list[dict[str, Any]], client: OpenAI) -> list[list[float]]:
+def compute_embeddings(docs: list[dict[str, Any]]) -> list[list[float]]:
     """计算文档的语义嵌入向量"""
-    embeddings = []
-
-    for i, doc in enumerate(docs):
-        text = doc.get("title", "") + " " + doc.get("content", "")[:1000]
-
-        if i % 5 == 0:
-            print(f"  嵌入进度: {i}/{len(docs)}")
-
-        embedding = get_embedding(text, client)
-        embeddings.append(embedding)
-
-    return embeddings
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """计算余弦相似度"""
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = sum(x * x for x in a) ** 0.5
-    norm_b = sum(x * x for x in b) ** 0.5
-    return dot / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
+    texts = [doc.get("title", "") + " " + doc.get("content", "")[:1000] for doc in docs]
+    return get_embeddings(texts)
 
 
 def compute_similarity(embeddings: list[list[float]]) -> list[list[float]]:
     """计算相似度矩阵"""
-    n = len(embeddings)
-    matrix = []
-    for i in range(n):
-        row = []
-        for j in range(n):
-            if i == j:
-                row.append(1.0)
-            else:
-                row.append(cosine_similarity(embeddings[i], embeddings[j]))
-        matrix.append(row)
-    return matrix
+    return embedding_similarity_matrix(embeddings).tolist()
 
 
 def cluster_docs(
@@ -155,7 +129,7 @@ def cluster_docs(
     return clusters
 
 
-def extract_triplets(client: OpenAI, docs_texts: list[dict[str, str]]) -> str:
+def extract_triplets(docs_texts: list[dict[str, str]]) -> str:
     """使用 LLM 提取知识图谱三元组"""
     combined = "\n\n".join(
         [
@@ -182,19 +156,10 @@ kb:实体2 rdfs:label "实体2" .
 kb:实体1 kb:关系 kb:实体2 .
 """
 
-    response = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-
-    content = response.choices[0].message.content
-    return content if content else ""
+    return llm_chat_str(prompt, temperature=0.3)
 
 
-def evaluate_ttl_quality(
-    client: OpenAI, ttl_content: str, docs_titles: list[str]
-) -> dict[str, Any]:
+def evaluate_ttl_quality(ttl_content: str, docs_titles: list[str]) -> dict[str, Any]:
     """评估 TTL 知识图谱质量"""
     prompt = f"""请评估以下知识图谱的质量。
 
@@ -220,30 +185,13 @@ def evaluate_ttl_quality(
 只输出JSON，不要其他内容。
 """
 
-    response = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-
-    content = response.choices[0].message.content
-    if not content:
+    result = llm_json_request(prompt)
+    if not result:
         return {"error": "评估失败"}
-
-    try:
-        import json
-
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(content[start:end])
-    except Exception:
-        pass
-
-    return {"error": "解析失败", "raw": content}
+    return result
 
 
-def summarize_content(client: OpenAI, docs: list[dict[str, Any]]) -> str:
+def summarize_content(docs: list[dict[str, Any]]) -> str:
     """使用 LLM 生成内容介绍"""
     sample_docs = docs[:10]
     combined = "\n\n".join(
@@ -261,19 +209,10 @@ def summarize_content(client: OpenAI, docs: list[dict[str, Any]]) -> str:
 请直接输出介绍内容，不要其他格式。
 """
 
-    response = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-
-    content = response.choices[0].message.content
-    return content.strip() if content else ""
+    return llm_chat_str(prompt, temperature=0.3)
 
 
-def evaluate_content_quality(
-    client: OpenAI, docs: list[dict[str, Any]]
-) -> dict[str, Any]:
+def evaluate_content_quality(docs: list[dict[str, Any]]) -> dict[str, Any]:
     """评估知识库内容质量"""
     sample_docs = docs[:8]
     combined = "\n\n".join(
@@ -307,25 +246,10 @@ def evaluate_content_quality(
 只输出JSON，不要其他内容。
 """
 
-    response = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-
-    content = response.choices[0].message.content
-    if not content:
+    result = llm_json_request(prompt)
+    if not result:
         return {"error": "评估失败"}
-
-    try:
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(content[start:end])
-    except Exception:
-        pass
-
-    return {"error": "解析失败", "raw": content}
+    return result
 
 
 def generate_report(
@@ -546,14 +470,12 @@ def run_profile_activity(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    client = create_llm_client()
-
     print("扫描知识库...")
     docs = scan_knowledge_base(data_dir)
     print(f"加载了 {len(docs)} 篇文档")
 
     print("计算语义嵌入向量...")
-    embeddings = compute_embeddings(docs, client)
+    embeddings = compute_embeddings(docs)
     print(f"计算了 {len(embeddings)} 个嵌入向量")
 
     similarity_matrix = compute_similarity(embeddings)
@@ -600,7 +522,7 @@ def run_profile_activity(
 
         print(f"  处理 Cluster {idx + 1} ({len(cluster)} docs)...")
 
-        ttl_triplets = extract_triplets(client, cluster_docs_list)
+        ttl_triplets = extract_triplets(cluster_docs_list)
 
         ttl_lines.append(f"# Cluster {idx + 1}: {len(cluster)} related docs")
         ttl_lines.append(ttl_triplets)
@@ -609,9 +531,7 @@ def run_profile_activity(
         quality = {}
         if enable_quality_check and ttl_triplets:
             print(f"    评估质量...")
-            quality = evaluate_ttl_quality(
-                client, ttl_triplets, [t["title"] for t in titles]
-            )
+            quality = evaluate_ttl_quality(ttl_triplets, [t["title"] for t in titles])
             quality_results.append(
                 {
                     "cluster_id": idx + 1,
@@ -624,7 +544,7 @@ def run_profile_activity(
                 "cluster_id": idx + 1,
                 "doc_count": len(cluster),
                 "titles": titles,
-                "keywords": _extract_keywords([t["title"] for t in titles]),
+                "keywords": extract_keywords([t["title"] for t in titles]),
                 "quality": quality,
             }
         )
@@ -635,12 +555,12 @@ def run_profile_activity(
     print(f"知识图谱已保存到: {ttl_file}")
 
     print("生成内容介绍...")
-    content_intro = summarize_content(client, docs)
+    content_intro = summarize_content(docs)
 
     print("评估内容质量...")
     content_quality = {}
     if enable_quality_check:
-        content_quality = evaluate_content_quality(client, docs)
+        content_quality = evaluate_content_quality(docs)
 
     report = generate_report(
         len(docs),
@@ -657,14 +577,6 @@ def run_profile_activity(
     print(f"分析报告已保存到: {output_dir / '报告.md'}")
 
     return report
-
-
-def _extract_keywords(texts: list[str]) -> list[str]:
-    """提取关键词"""
-    all_text = " ".join(texts)
-    words = re.findall(r"[\u4e00-\u9fa5]{2,4}", all_text)
-    counter = Counter(words)
-    return [w for w, _ in counter.most_common(15)]
 
 
 if __name__ == "__main__":
