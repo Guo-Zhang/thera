@@ -21,13 +21,14 @@ from typing import Any
 
 from thera.config import settings
 from thera.domain.knowl import (
-    _parse_json_response,
-    create_llm_client,
     embedding_similarity_matrix,
     get_embedding,
     get_embeddings,
-    llm_chat_str,
-    llm_json_request,
+)
+from thera.infra.llm import (
+    chat_str as llm_chat_str,
+    json_request as llm_json_request,
+    parse_json as _parse_json_response,
 )
 
 

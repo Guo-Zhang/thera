@@ -286,7 +286,7 @@ class TestKnowlDomain:
 
 
 class TestLLMFunctions:
-    @patch("thera.domain.knowl.create_llm_client")
+    @patch("thera.infra.llm.create_client")
     def test_llm_chat_str(self, mock_create_client):
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -295,9 +295,9 @@ class TestLLMFunctions:
         mock_client.chat.completions.create.return_value = mock_response
         mock_create_client.return_value = mock_client
 
-        from thera.domain.knowl import llm_chat_str
+        from thera.infra.llm import chat_str
 
-        result = llm_chat_str("Hello", system_prompt="You are helpful")
+        result = chat_str("Hello", system_prompt="You are helpful")
         assert result == "Test response"
 
         mock_client.chat.completions.create.assert_called_once()
@@ -306,7 +306,7 @@ class TestLLMFunctions:
         assert call_kwargs["messages"][1]["role"] == "user"
         assert call_kwargs["messages"][1]["content"] == "Hello"
 
-    @patch("thera.domain.knowl.create_llm_client")
+    @patch("thera.infra.llm.create_client")
     def test_llm_stream(self, mock_create_client):
         mock_client = MagicMock()
 
@@ -326,26 +326,26 @@ class TestLLMFunctions:
         mock_client.chat.completions.create.return_value = mock_generator()
         mock_create_client.return_value = mock_client
 
-        from thera.domain.knowl import llm_stream
+        from thera.infra.llm import stream
 
-        result = list(llm_stream("Hello"))
+        result = list(stream("Hello"))
         assert "Hello" in result[0]
         assert "world" in result[1]
 
     def test_parse_json_response_valid(self):
-        from thera.domain.knowl import _parse_json_response
+        from thera.infra.llm import _parse_json
 
-        result = _parse_json_response('{"key": "value"}')
+        result = _parse_json('{"key": "value"}')
         assert result == {"key": "value"}
 
     def test_parse_json_response_with_wrapper(self):
-        from thera.domain.knowl import _parse_json_response
+        from thera.infra.llm import _parse_json
 
-        result = _parse_json_response('text {"key": "value"} more')
+        result = _parse_json('text {"key": "value"} more')
         assert result == {"key": "value"}
 
     def test_parse_json_response_invalid(self):
-        from thera.domain.knowl import _parse_json_response
+        from thera.infra.llm import _parse_json
 
-        result = _parse_json_response("not json")
+        result = _parse_json("not json")
         assert result == {}

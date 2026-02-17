@@ -13,6 +13,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from thera.config import settings
+from thera.infra.llm import (
+    get_embedding,
+    get_embeddings,
+    json_request as llm_json_request,
+    chat_str as llm_chat_str,
+    stream as llm_stream,
+)
 from thera.meta import Domain, DomainType
 
 
@@ -123,89 +130,6 @@ def keyword_similarity(text1: str, text2: str) -> float:
     intersection = len(kw1 & kw2)
     union = len(kw1 | kw2)
     return intersection / union
-
-
-def create_llm_client():
-    from openai import OpenAI
-
-    return OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
-
-
-def llm_chat(
-    messages: list[dict[str, str]],
-    model: str | None = None,
-    temperature: float = 0.7,
-    stream: bool = False,
-):
-    client = create_llm_client()
-    return client.chat.completions.create(
-        model=model or settings.llm_model,
-        messages=messages,
-        temperature=temperature,
-        stream=stream,
-    )
-
-
-def llm_chat_str(
-    prompt: str,
-    system_prompt: str = "",
-    model: str | None = None,
-    temperature: float = 0.7,
-) -> str:
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
-    response = llm_chat(messages, model, temperature)
-    return response.choices[0].message.content or ""
-
-
-def llm_stream(prompt: str, system_prompt: str = ""):
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
-    response = llm_chat(messages, stream=True)
-    for chunk in response:
-        if not chunk.choices:
-            continue
-        delta = chunk.choices[0].delta
-        if delta.content:
-            yield delta.content
-        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-            yield delta.reasoning_content
-
-
-def _parse_json_response(response: str) -> dict[str, Any]:
-    try:
-        return json.loads(response)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", response, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-    return {}
-
-
-def llm_json_request(prompt: str, system_prompt: str = "") -> dict[str, Any]:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
-
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
-    response = client.chat.completions.create(
-        model=settings.llm_model,
-        messages=messages,
-        temperature=0.7,
-    )
-
-    content = response.choices[0].message.content or ""
-    return _parse_json_response(content)
 
 
 def compute_all_similarities(articles: dict[str, dict]) -> dict:
