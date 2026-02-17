@@ -23,6 +23,7 @@ from typing import Any
 from openai import OpenAI
 
 from thera.config import settings
+from thera.lib.knowl import _parse_json_response, llm_json_request
 
 
 def create_llm_client() -> OpenAI:

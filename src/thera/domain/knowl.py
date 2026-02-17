@@ -3,17 +3,20 @@
 """
 
 import json
-import re
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
+from thera.lib.knowl import (
+    compute_all_similarities,
+    embedding_similarity,
+    get_embeddings_batch,
+    jaccard_similarity,
+    keyword_similarity,
+    tfidf_similarity as _tfidf_similarity,
+)
 from thera.meta import Domain, DomainType
-from thera.config import settings
 
 
 class DocType(Enum):
@@ -56,68 +59,13 @@ def load_articles(docs_dir: Path) -> tuple[dict[str, dict], dict]:
     return articles, doc_types
 
 
-def get_embeddings(texts: list[str], batch_size: int = 10) -> np.ndarray:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
-
-    all_embeddings = []
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i : i + batch_size]
-        response = client.embeddings.create(
-            model=settings.llm_embedding_model, input=batch
-        )
-        all_embeddings.extend([d.embedding for d in response.data])
-
-    return np.array(all_embeddings)
-
-
-def embedding_similarity(embeddings: np.ndarray) -> np.ndarray:
-    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    normalized = embeddings / (norms + 1e-8)
-    return np.dot(normalized, normalized.T)
-
-
-def jaccard_similarity(text1: str, text2: str) -> float:
-    def get_ngrams(text: str, n: int = 3) -> set:
-        text = re.sub(r"\s+", "", text.lower())
-        return set(text[i : i + n] for i in range(len(text) - n + 1))
-
-    ngrams1 = get_ngrams(text1)
-    ngrams2 = get_ngrams(text2)
-
-    if not ngrams1 or not ngrams2:
-        return 0.0
-
-    intersection = len(ngrams1 & ngrams2)
-    union = len(ngrams1 | ngrams2)
-    return intersection / union if union > 0 else 0.0
-
-
 def tfidf_similarity(texts: list[str]) -> np.ndarray:
-    vectorizer = TfidfVectorizer(analyzer="char", ngram_range=(2, 4), max_features=5000)
-    tfidf_matrix = vectorizer.fit_transform(texts)
-    return cosine_similarity(tfidf_matrix)
-
-
-def keyword_similarity(text1: str, text2: str) -> float:
-    def extract_keywords(text: str) -> set:
-        text = re.sub(r"[^\w\u4e00-\u9fff]", " ", text)
-        words = text.split()
-        return set(w for w in words if len(w) >= 2)
-
-    kw1 = extract_keywords(text1)
-    kw2 = extract_keywords(text2)
-
-    if not kw1 or not kw2:
-        return 0.0
-
-    intersection = len(kw1 & kw2)
-    union = len(kw1 | kw2)
-    return intersection / union
+    return _tfidf_similarity(texts)
 
 
 def compute_all_similarities(articles: dict[str, dict]) -> dict:
+    from thera.lib.knowl import get_embeddings_batch
+
     names = list(articles.keys())
     contents = [articles[n]["content"] for n in names]
 
@@ -139,7 +87,7 @@ def compute_all_similarities(articles: dict[str, dict]) -> dict:
     tfidf_sim = tfidf_similarity(contents)
     results["tfidf"] = tfidf_sim
 
-    embeddings = get_embeddings(contents)
+    embeddings = get_embeddings_batch(contents)
     embedding_sim = embedding_similarity(embeddings)
     results["embedding"] = embedding_sim
 
@@ -192,6 +140,8 @@ def discover_with_llm(
     articles: dict[str, dict], sim_results: dict, doc_types: dict
 ) -> str:
     from openai import OpenAI
+
+    from thera.config import settings
 
     client = OpenAI(
         api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=180.0
@@ -317,7 +267,7 @@ def discover_with_llm(
         temperature=0.7,
     )
 
-    return response.choices[0].message.content
+    return response.choices[0].message.content or ""
 
 
 def export_html(markdown_path: Path, html_path: Path):
@@ -432,6 +382,4 @@ class KnowlDomain(Domain):
             return DomainType.THINK
         if user_input.startswith("/write"):
             return DomainType.WRITE
-        if user_input.startswith("/chat"):
-            return DomainType.CHAT
         return None
