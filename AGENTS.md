@@ -1,198 +1,41 @@
-# CODEBUDDY.md
+# AGENTS
 
-This file provides guidance to CodeBuddy Code when working with code in this repository.
+本文件只保留 AI/代理协作约束；项目通用说明统一放在 `README.md`。
 
-## Common Commands
+## 参考顺序
 
-```bash
-# Install dependencies (development mode)
-uv sync --dev
+1. 先看 `README.md`（命令、架构、环境变量、数据规则）。
+2. 再看 `docs/RAEDME.md` 和 `docs/dev/README.md` 获取细节。
 
-# Run all tests
-uv run pytest -v
+## 协作约束
 
-# Run a single test file
-uv run pytest tests/test_cli.py -v
+- 修改代码前，先核对 `README.md` 的当前约定。
+- 若发现 README 与代码不一致，优先在同一变更中更新 `README.md`。
+- 涉及用户数据（移动、删除、重命名）前必须先确认。
+- 未经明确要求，不执行破坏性操作（如批量删除、重置历史）。
 
-# Run a single test function
-uv run pytest tests/test_cli.py::test_function_name -v
+## 文档入口
 
-# Run tests with coverage
-uv run pytest --cov=thera --cov-report=term-missing
+- 项目文档索引：`docs/RAEDME.md`
+- 开发文档：`docs/dev/README.md`
+- 用户指南：`docs/user/README.md`
+- 运维文档：`docs/ops/README.md`
 
-# Run the CLI application
-uv run thera
+## 文档一致性要求
 
-# Or use python directly
-python -m thera
+- README 是项目入口真相源（single source of truth）。
+- AGENTS 不重复维护命令清单、架构细节、环境变量；这些内容仅维护在 README。
+- 后续若发现说明不准确，请及时修正 `README.md`，并保持本文件最小化。
 
-# Check version
-thera --version
-```
+## 数据安全规则
 
-## Environment Setup
+- 涉及用户数据的移动、删除、重命名前，先确认。
+- 避免直接使用破坏性删除命令，优先先检查再操作。
+- 重要数据操作前先确认文件存在，必要时先备份。
+- 优先读取数据，修改写入前再次确认影响范围。
 
-Copy `.env.example` to `.env` and configure:
-- `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`
-- `LLM_EMBEDDING_MODEL`, `LLM_RERANKER_MODEL`
-- `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`
+## 文档维护约定
 
-## Project Architecture
-
-This is a **modular AI knowledge management system** with multiple independent components:
-
-### 1. Knowledge Graph Module (`examples/knowl/`)
-- **graphiti.py**: Graphiti client integration with Neo4j for episodic memory
-- **neo4j_graphrag.py**: Neo4j native RAG implementation using `neo4j-graphrag` library
-- **config.py**: Shared Pydantic Settings for knowledge modules
-
-Key classes:
-- `Graphiti` (from `graphiti_core`): Episodic knowledge graph with temporal reasoning
-- `VectorRetriever`, `GraphRAG` (from `neo4j-graphrag`): Vector-based retrieval
-
-### 2. Connect Module (`examples/connect/`)
-- **models/context.py**: Context management with authority sources (SYSTEM, USER, NEGOTIATED) and confirmation status (PENDING, CONFIRMED, DISPUTED)
-- **models/dialogue.py**: Dialogue history management
-- **views/**: UI components for displaying messages and memos
-- **screens/**: Full screen implementations (e.g., dialogue screen)
-
-### 3. Write Module (`examples/write/`)
-- **analyzer.py**: Novel fragment organization analyzer
-  - `FragmentAnalyzer`: Analyzes how story fragments integrate into main text
-  - `Dialogue`: Speaker inference (male/female/other/unknown), validity detection
-  - `DocumentInfo`: Title, word count, paragraphs, dialogues, emotional tone
-  - Features: keyword extraction, location detection, emotional analysis, similarity scoring
-
-### 4. Docs Module (`examples/docs/`)
-- **feishu.py**: Lark (Feishu) API integration for document processing
-- **feishu_to_jupyterbook.py**: Convert Feishu documents to JupyterBook format
-
-### 5. Core Package (`src/thera/`)
-Currently minimal - package entry points only. Main logic lives in examples.
-
-### 6. Infra Module (`src/thera/infra/`)
-Infrastructure integrations for data import:
-
-- **apple.py**: Apple Notes import via AppleScript
-  - `get_notes_from_folder(folder_name)`: Get notes from specific folder
-  - `export_notes(output_dir, folder_name)`: Export notes to JSON
-  - `list_notes(output_dir)`: List exported notes
-  - Default folder: "思考"
-
-### 7. Activity Module (`src/thera/activity/`)
-Activity pipelines for processing and analyzing data:
-
-- **memo.py**: Memo activity pipeline
-  - `run_memo_activity()`: Analyze Apple Notes, compute similarity, cluster and extract knowledge
-  - Input: `data/infra/apple/notes.json`
-  - Output: `data/activity/memo/analysis.json`
-
-## Data Storage
-
-- `data/`: Runtime data (jupyterbook content, analysis outputs)
-- `docs/`: Imported documentation organized by category
-- `dev_docs/`: Development documentation (imported to knowledge graph)
-
-## Key Dependencies
-
-- `graphiti-core`: Knowledge graph with episodic memory
-- `neo4j-graphrag`: Neo4j RAG implementation
-- `openai`: OpenAI-compatible API client
-- `pydantic-settings`: Configuration management
-- `textual`: TUI framework
-- `lark-oapi`: Feishu/Lark API client
-
-## Data Safety Rules
-
-1. **删除前确认** - 涉及用户数据的操作（移动、删除、重命名），必须先询问用户确认
-2. **不主动删除** - 避免使用 `rm -rf` 等破坏性命令，优先用 safe delete 或先检查
-3. **操作前备份** - 重要数据操作前，先检查是否存在，必要时备份
-4. **读取为主** - 优先读取用户数据而非修改，修改前确认
-
-## Common Tasks
-
-### Export Apple Notes
-
-```bash
-# Export notes from "思考" folder
-uv run python -c "from thera.infra.apple import export_notes, get_default_output_dir; export_notes(get_default_output_dir())"
-```
-
-### Run Memo Activity
-
-```bash
-# Analyze Apple Notes, compute similarity, cluster and extract knowledge
-uv run python -c "from thera.activity.memo import run_memo_activity; run_memo_activity()"
-
-# With custom parameters
-uv run python -c "
-from thera.activity.memo import run_memo_activity
-run_memo_activity(similarity_threshold=0.6, enable_quality_check=True)
-"
-```
-
-### Run Audit
-
-```bash
-# Analyze AGENTS.md meta-cognition score
-uv run python scripts/audit.py
-```
-
-## Developer Documentation
-
-Developer docs in `docs/dev/` serve as a knowledge base for this project:
-
-- **Purpose**: Record implementation details, pitfalls, and lessons learned during development
-- **When to update**: After completing a feature or fixing a significant bug
-- **What to document**: Development logic, algorithm design, code patterns, common errors
-- **What NOT to document**: Specific run results or outputs - these should be saved to `data/activity/<module>/` as reports
-- **Module comments**: Keep module-level docstrings updated with input/output/algorithm
-- **Location**: `docs/dev/infra/` for infrastructure modules, `docs/dev/activity/` for activity modules
-
-## Module Evaluation
-
-Each module that processes data must include an evaluation program:
-
-- **Purpose**: Assess the quality of module outputs (e.g., knowledge graphs, clusters)
-- **Implementation**: Use LLM to evaluate quality dimensions (completeness, accuracy, coherence)
-- **Output**: Evaluation results must be included in the module's report
-- **Example**: Memo activity evaluates TTL knowledge graph quality and includes scores in `report.json`
-
-## Execution Checkpoints
-
-Each activity/pipeline script should include explicit validation checkpoints:
-
-```python
-# Example: run_memo_activity() checkpoint template
-def run_activity():
-    # 1. Execute main logic
-    result = do_something()
-
-    # 2. Validate output
-    assert result is not None
-    assert len(result) > 0, "No data generated"
-
-    # 3. Check quality metrics
-    if quality_score < threshold:
-        fallback_or_alert()
-
-    # 4. Log execution metadata
-    log({"duration": end - start, "quality": quality_score})
-```
-
-## Known Cognitive Gaps
-
-Known limitations in the current architecture:
-
-- **No confidence calibration**: LLM evaluation results lack confidence intervals
-- **No cross-module provenance**: Cannot trace knowledge quality across modules
-- **No runtime monitoring**: Progress tracking is static, not dynamic
-- **Limited emotion categories**: Sentiment analysis only supports positive/negative/neutral
-
-## Appendix: Ops Scripts
-
-Operational scripts for system maintenance:
-
-- **scripts/audit.py**: Meta-cognition analysis of AGENTS.md
-  - Run: `uv run python scripts/audit.py`
-  - Output: `docs/ops/reports/report.json`
+- 功能新增或重构后，及时更新 `README.md` 与对应 `docs/dev/` 文档。
+- `README.md` 作为项目入口文档，应与当前代码结构和命令保持一致。
+- 运行结果与报告不写入 README，放在 `data/` 或 `docs/ops/reports/`。
