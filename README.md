@@ -91,7 +91,9 @@ docs/
   ops/                   # 运维与审计
 ```
 
-## 最小工作流（Apple Notes -> Memo 分析）
+## 最小工作流
+
+### Apple Notes -> Memo 分析
 
 ```bash
 # 导出“思考”文件夹备忘录到 data/infra/apple/notes.json
@@ -99,4 +101,14 @@ uv run python -c "from thera.infra.apple import export_notes, get_default_output
 
 # 执行 memo activity，输出到 data/activity/memo/
 uv run python -c "from thera.activity.memo import run_memo_activity; run_memo_activity()"
+```
+
+### 知识库 -> 知识发现
+
+```bash
+# 克隆知识库到 data/infra/github/
+git clone https://github.com/quanttide/quanttide-profile-of-founder data/infra/github
+
+# 执行 profile activity，输出到 data/activity/profile/
+uv run python -c "from thera.activity.profile import run_profile_activity; run_profile_activity()"
 ```
