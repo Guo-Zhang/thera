@@ -72,6 +72,14 @@ def get_embeddings(texts: list[str], batch_size: int = 10) -> np.ndarray:
     return np.array(all_embeddings)
 
 
+def get_embedding(text: str) -> list[float]:
+    return get_embeddings([text])[0].tolist()
+
+
+def embedding_similarity_matrix(embeddings: list[list[float]]) -> np.ndarray:
+    return embedding_similarity(np.array(embeddings))
+
+
 def embedding_similarity(embeddings: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
     normalized = embeddings / (norms + 1e-8)
