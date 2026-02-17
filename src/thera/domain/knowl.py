@@ -8,16 +8,16 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
 from thera.config import settings
-from thera.infra.llm import (
+from thera.infra.aigc import (
+    chat_str as llm_chat_str,
+    extract_keywords,
+    extract_triplets,
+    find_bridge_notes,
+    find_cross_cluster_links,
     get_embedding,
     get_embeddings,
     json_request as llm_json_request,
-    chat_str as llm_chat_str,
     stream as llm_stream,
 )
 from thera.meta import Domain, DomainType
@@ -63,76 +63,15 @@ def load_articles(docs_dir: Path) -> tuple[dict[str, dict], dict]:
     return articles, doc_types
 
 
-def get_embeddings(texts: list[str], batch_size: int = 10) -> np.ndarray:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
-
-    all_embeddings = []
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i : i + batch_size]
-        response = client.embeddings.create(
-            model=settings.llm_embedding_model, input=batch
-        )
-        all_embeddings.extend([d.embedding for d in response.data])
-
-    return np.array(all_embeddings)
-
-
-def get_embedding(text: str) -> list[float]:
-    return get_embeddings([text])[0].tolist()
-
-
-def embedding_similarity_matrix(embeddings: list[list[float]]) -> np.ndarray:
-    return embedding_similarity(np.array(embeddings))
-
-
-def embedding_similarity(embeddings: np.ndarray) -> np.ndarray:
-    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    normalized = embeddings / (norms + 1e-8)
-    return np.dot(normalized, normalized.T)
-
-
-def jaccard_similarity(text1: str, text2: str) -> float:
-    def get_ngrams(text: str, n: int = 3) -> set:
-        text = re.sub(r"\s+", "", text.lower())
-        return set(text[i : i + n] for i in range(len(text) - n + 1))
-
-    ngrams1 = get_ngrams(text1)
-    ngrams2 = get_ngrams(text2)
-
-    if not ngrams1 or not ngrams2:
-        return 0.0
-
-    intersection = len(ngrams1 & ngrams2)
-    union = len(ngrams1 | ngrams2)
-    return intersection / union if union > 0 else 0.0
-
-
-def tfidf_similarity(texts: list[str]) -> np.ndarray:
-    vectorizer = TfidfVectorizer(analyzer="char", ngram_range=(2, 4), max_features=5000)
-    tfidf_matrix = vectorizer.fit_transform(texts)
-    return cosine_similarity(tfidf_matrix)
-
-
-def keyword_similarity(text1: str, text2: str) -> float:
-    def extract_keywords(text: str) -> set:
-        text = re.sub(r"[^\w\u4e00-\u9fff]", " ", text)
-        words = text.split()
-        return set(w for w in words if len(w) >= 2)
-
-    kw1 = extract_keywords(text1)
-    kw2 = extract_keywords(text2)
-
-    if not kw1 or not kw2:
-        return 0.0
-
-    intersection = len(kw1 & kw2)
-    union = len(kw1 | kw2)
-    return intersection / union
-
-
 def compute_all_similarities(articles: dict[str, dict]) -> dict:
+    import numpy as np
+    from thera.infra.aigc import (
+        embedding_similarity,
+        jaccard_similarity,
+        keyword_similarity,
+        tfidf_similarity,
+    )
+
     names = list(articles.keys())
     contents = [articles[n]["content"] for n in names]
 
@@ -155,7 +94,7 @@ def compute_all_similarities(articles: dict[str, dict]) -> dict:
     results["tfidf"] = tfidf_sim
 
     embeddings = get_embeddings(contents)
-    embedding_sim = embedding_similarity(embeddings)
+    embedding_sim = embedding_similarity(np.array(embeddings))
     results["embedding"] = embedding_sim
 
     return {"names": names, "similarities": results}
@@ -388,38 +327,15 @@ def cluster_notes(
     similarity_matrix: list[list[float]],
     threshold: float = 0.5,
 ) -> list[list[int]]:
-    """根据相似度阈值分组"""
-    n = len(similarity_matrix)
-    visited = [False] * n
-    clusters = []
+    from thera.infra.aigc import cluster_notes as _cluster_notes
 
-    for i in range(n):
-        if visited[i]:
-            continue
-
-        cluster = [i]
-        visited[i] = True
-
-        for j in range(i + 1, n):
-            if not visited[j] and similarity_matrix[i][j] > threshold:
-                cluster.append(j)
-                visited[j] = True
-
-        if len(cluster) > 1:
-            clusters.append(cluster)
-
-    return clusters
+    return _cluster_notes(similarity_matrix, threshold)
 
 
 def extract_keywords(texts: list[str], top_n: int = 15) -> list[str]:
-    """提取关键词"""
-    import re
-    from collections import Counter
+    from thera.infra.aigc import extract_keywords as _extract_keywords
 
-    all_text = " ".join(texts)
-    words = re.findall(r"[\u4e00-\u9fa5]{2,4}", all_text)
-    counter = Counter(words)
-    return [w for w, _ in counter.most_common(top_n)]
+    return _extract_keywords(texts, top_n)
 
 
 def generate_report(
@@ -530,98 +446,25 @@ def generate_report(
 def compute_cluster_centroids(
     embeddings: list[list[float]], clusters: list[list[int]]
 ) -> list[list[float]]:
-    """计算每个聚类的质心"""
-    import numpy as np
+    from thera.infra.aigc import compute_cluster_centroids as _compute_cluster_centroids
 
-    embeddings_array = np.array(embeddings)
-    centroids = []
-    for cluster in clusters:
-        cluster_embeddings = embeddings_array[cluster]
-        centroid = cluster_embeddings.mean(axis=0).tolist()
-        centroids.append(centroid)
-    return centroids
+    return _compute_cluster_centroids(embeddings, clusters)
 
 
 def find_bridge_notes(
     embeddings: list[list[float]], clusters: list[list[int]], threshold: float = 0.3
 ) -> list[dict[str, Any]]:
-    """找出连接不同聚类的桥接笔记"""
-    import numpy as np
+    from thera.infra.aigc import find_bridge_notes as _find_bridge_notes
 
-    embeddings_array = np.array(embeddings)
-    centroids = compute_cluster_centroids(embeddings, clusters)
-    n_clusters = len(clusters)
-
-    if n_clusters < 2:
-        return []
-
-    bridge_notes = []
-    for i, cluster in enumerate(clusters):
-        for note_idx in cluster:
-            note_embedding = embeddings_array[note_idx]
-            similarities = []
-            for j, centroid in enumerate(centroids):
-                if i == j:
-                    continue
-                sim = np.dot(note_embedding, centroid) / (
-                    np.linalg.norm(note_embedding) * np.linalg.norm(centroid) + 1e-8
-                )
-                similarities.append((j, sim))
-
-            max_sim = max(similarities, key=lambda x: x[1])
-            if max_sim[1] > threshold:
-                bridge_notes.append(
-                    {
-                        "note_index": note_idx,
-                        "from_cluster": i,
-                        "to_cluster": max_sim[0],
-                        "similarity": float(max_sim[1]),
-                    }
-                )
-
-    return bridge_notes
+    return _find_bridge_notes(embeddings, clusters, threshold)
 
 
 def find_cross_cluster_links(
     embeddings: list[list[float]], clusters: list[list[int]], top_n: int = 3
 ) -> list[dict[str, Any]]:
-    """找出跨聚类的高相似度连接"""
-    import numpy as np
+    from thera.infra.aigc import find_cross_cluster_links as _find_cross_cluster_links
 
-    embeddings_array = np.array(embeddings)
-    n_clusters = len(clusters)
-    cross_links = []
-
-    for i in range(n_clusters):
-        for j in range(i + 1, n_clusters):
-            cluster_i_embeddings = embeddings_array[clusters[i]]
-            cluster_j_embeddings = embeddings_array[clusters[j]]
-
-            sim_matrix = np.dot(cluster_i_embeddings, cluster_j_embeddings.T)
-            sim_matrix = sim_matrix / (
-                np.linalg.norm(cluster_i_embeddings, axis=1, keepdims=True)
-                * np.linalg.norm(cluster_j_embeddings, axis=1, keepdims=True).T
-                + 1e-8
-            )
-
-            for _ in range(top_n):
-                max_idx = np.unravel_index(np.argmax(sim_matrix), sim_matrix.shape)
-                max_sim = sim_matrix[max_idx]
-                if max_sim > 0.5:
-                    cross_links.append(
-                        {
-                            "from_cluster": i,
-                            "to_cluster": j,
-                            "from_note": clusters[i][max_idx[0]],
-                            "to_note": clusters[j][max_idx[1]],
-                            "similarity": float(max_sim),
-                        }
-                    )
-                    sim_matrix[max_idx[0], max_idx[1]] = 0
-                else:
-                    break
-
-    return cross_links
+    return _find_cross_cluster_links(embeddings, clusters, top_n)
 
 
 def generate_reasoning_report(

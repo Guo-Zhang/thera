@@ -22,16 +22,10 @@ from thera.domain.knowl import (
     generate_reasoning_report,
     get_embeddings,
 )
-from thera.infra.llm import (
+from thera.infra.aigc import (
     analyze_development_direction as llm_analyze_direction,
-)
-from thera.infra.llm import (
     classify_and_draft as llm_classify,
-)
-from thera.infra.llm import (
     json_request as llm_json_request,
-)
-from thera.infra.llm import (
     summarize_content as llm_summarize_content,
 )
 
