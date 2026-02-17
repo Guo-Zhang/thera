@@ -18,6 +18,78 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+def get_notes_folder_structure() -> List[Dict[str, Any]]:
+    """获取备忘录文件夹元数据（含父级关系与条目数量）"""
+    script_lines = [
+        'tell application "Notes"',
+        "set folderData to {}",
+        "repeat with f in every folder",
+        "set folderId to (id of f) as string",
+        "set folderName to name of f",
+        "set noteCount to count of notes in f",
+        'set parentId to ""',
+        "try",
+        "set parentRef to container of f",
+        "if class of parentRef is folder then",
+        "set parentId to (id of parentRef) as string",
+        "end if",
+        "end try",
+        'set folderText to folderId & "|||" & folderName & "|||" & parentId & "|||" & (noteCount as string)',
+        "set end of folderData to folderText",
+        "end repeat",
+        "set oldDelims to AppleScript's text item delimiters",
+        "set AppleScript's text item delimiters to linefeed",
+        "set outputText to folderData as text",
+        "set AppleScript's text item delimiters to oldDelims",
+        "return outputText",
+        "end tell",
+    ]
+    args = ["osascript"]
+    for line in script_lines:
+        args.extend(["-e", line])
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            return []
+
+        output = result.stdout.strip()
+        if not output:
+            return []
+
+        folders = []
+        for item in output.splitlines():
+            parts = item.split("|||", 3)
+            if len(parts) != 4:
+                continue
+            folder_id, name, parent_id, count_text = parts
+            folder_id = folder_id.strip()
+            name = name.strip()
+            parent_id = parent_id.strip() or None
+            count_text = count_text.strip()
+            if not folder_id or not name:
+                continue
+            try:
+                note_count = int(count_text)
+            except ValueError:
+                note_count = 0
+            folders.append(
+                {
+                    "id": folder_id,
+                    "name": name,
+                    "parent_id": parent_id,
+                    "note_count": note_count,
+                }
+            )
+        return folders
+    except Exception:
+        return []
+
+
 def get_notes_from_folder(folder_name: str = "思考") -> List[Dict[str, Any]]:
     """获取指定文件夹的备忘录（包含标题和内容）"""
     script_lines = [
@@ -254,32 +326,58 @@ def get_default_output_dir() -> Path:
     return Path(__file__).parent.parent.parent.parent / "data" / "infra" / "apple"
 
 
+def build_folder_tree(folders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """将扁平文件夹列表转换为树结构"""
+    nodes: Dict[str, Dict[str, Any]] = {}
+    for folder in folders:
+        node = {
+            "id": folder.get("id"),
+            "name": folder.get("name"),
+            "parent_id": folder.get("parent_id"),
+            "note_count": folder.get("note_count", 0),
+            "children": [],
+        }
+        folder_id = node["id"]
+        if isinstance(folder_id, str) and folder_id:
+            nodes[folder_id] = node
+
+    roots: List[Dict[str, Any]] = []
+    for node in nodes.values():
+        parent_id = node.get("parent_id")
+        if isinstance(parent_id, str) and parent_id in nodes:
+            nodes[parent_id]["children"].append(node)
+        else:
+            roots.append(node)
+    return roots
+
+
+def export_folder_structure(output_dir: Path) -> Dict[str, Any]:
+    """导出备忘录文件夹结构到 JSON 文件"""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    folders = get_notes_folder_structure()
+    tree = build_folder_tree(folders)
+    result = {
+        "export_date": datetime.now().isoformat(),
+        "total_count": len(folders),
+        "folders": tree,
+    }
+    output_file = output_dir / "folder_structure.json"
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    return result
+
+
 def main():
-    """主函数"""
+    """主函数：导出备忘录文件夹结构"""
     output_dir = get_default_output_dir()
-    print(f"苹果备忘录数据目录: {output_dir}")
-    print()
-
-    notes = list_notes(output_dir)
-    if notes:
-        print(f"已导入 {len(notes)} 条备忘录:")
-        for note in notes[:10]:
-            print(f"  - {note.get('title')}")
-        if len(notes) > 10:
-            print(f"  ... 共 {len(notes)} 条")
-    else:
-        print("未找到已导入的备忘录")
-        print()
-        print("使用方法:")
-        print("1. 自动导出: from thera.infra.apple import export_notes; export_notes()")
-        print("2. 手动导入: 将 JSON 文件放入 data/infra/apple/import.json")
-        print()
-        print("创建 Shortcut (推荐):")
-        print("  快捷指令 App -> 创建快捷指令")
-        print("  添加「获取所有备忘录」动作")
-        print("  添加「转换成 JSON」动作")
-        print("  命名为 GetAllNotes 并运行")
-
+    result = export_folder_structure(output_dir)
+    output_file = output_dir / "folder_structure.json"
+    print(f"已导出备忘录文件夹结构到: {output_file}")
+    print(f"文件夹数量: {result['total_count']}")
+    for folder in result["folders"][:10]:
+        print(f"  - {folder.get('name')} ({folder.get('note_count')} 条)")
+    if result["total_count"] > 10:
+        print(f"  ... 共 {result['total_count']} 个文件夹")
     return 0
 
 

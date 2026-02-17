@@ -93,10 +93,9 @@ quality = evaluate_ttl_quality(client, ttl_content, titles)
 
 ```python
 run_memo_activity(
-    notes_file=None,              # 输入文件路径
-    output_dir=None,              # 输出目录
+    notes_file=None,            # 默认 data/infra/apple/notes.json
+    output_dir=None,            # 默认 data/activity/memo/
     similarity_threshold=0.5,   # 相似度阈值
-    enable_quality_check=True,   # 是否启用质量评估
 )
 ```
 
