@@ -3,28 +3,17 @@ LLM 基础设施模块
 """
 
 import json
-from typing import Any, Type, TypeVar, Callable
+import re
+from typing import Any, Callable
 
-import instructor
 from openai import OpenAI
-from pydantic import BaseModel
 
 from thera.config import settings
-
-T = TypeVar("T", bound=BaseModel)
 
 
 def create_client() -> OpenAI:
     """创建 LLM 客户端"""
     return OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
-
-
-def create_instructor() -> instructor.Instructor:
-    """创建 Instructor 客户端"""
-    return instructor.from_openai(
-        OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url),
-        mode=instructor.Mode.JSON,
-    )
 
 
 def chat(
@@ -84,29 +73,15 @@ def json_request(
     temperature: float = 0.7,
 ) -> dict[str, Any]:
     """请求 JSON 格式响应"""
-    client = create_instructor()
-
-    class Response(BaseModel):
-        data: dict[str, Any]
+    result = chat_str(prompt, system_prompt, model, temperature)
 
     try:
-        response = client.chat.completions.create(
-            model=model or settings.llm_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": prompt + "\n\n请以 JSON 格式输出，不要其他内容。",
-                },
-            ],
-            response_model=Response,
-            temperature=temperature,
-        )
-        return response.data
-    except Exception:
-        pass
-
-    return chat_str(prompt, system_prompt, model, temperature)
+        return json.loads(result)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", result, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+    return {}
 
 
 def get_embeddings(texts: list[str], batch_size: int = 10):
