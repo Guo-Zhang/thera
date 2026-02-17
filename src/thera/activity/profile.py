@@ -22,11 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from thera.config import settings
-from thera.domain.knowl import (
-    embedding_similarity_matrix,
-    jaccard_similarity,
-    tfidf_similarity,
-)
+from thera.domain.knowl import embedding_similarity_matrix
 from thera.infra.llm import (
     chat_str as llm_chat_str,
     json_request as llm_json_request,
