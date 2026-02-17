@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-18T01:11:09.104353",
+  "timestamp": "2026-02-18T01:28:34.731215",
   "complexity": {
     "hotspots": [
       {
@@ -43,18 +43,18 @@
         "complexity": 4
       }
     ],
-    "raw": "src/thera/config.py\n    C 4:0 Settings - A (1)\nsrc/thera/__main__.py\n    F 188:0 get_app - A (2)\n    C 17:0 StorageState - A (2)\n    M 25:4 StorageState._validate_path - A (2)\n    M 35:4 StorageState.ensure_dirs - A (2)\n    M 56:4 StorageState.load_json - A (2)\n    M 72:4 StorageState.load_yaml - A (2)\n    C 82:0 Thera - A (2)\n    M 83:4 Thera.__init__ - A (2)\n    M 106:4 Thera.domain_manager - A (2)\n    M 112:4 Thera.storage - A (2)\n    M 117:4 Thera.switch_domain - A (2)\n    M 122:4 Thera.run - A (2)\n    F 196:0 main - A (1)\n    C 9:0 DomainType - A (1)\n    M 20:4 StorageState.__init__ - A (1)\n    M 31:4 StorageState.allowed_paths - A (1)\n    M 42:4 StorageState.get_data_dir - A (1)\n    M 49:4 StorageState.save_json - A (1)\n    M 65:4 StorageState.save_yaml - A (1)\n    M 90:4 Thera._default_storage_path - A (1)\n    M 94:4 Thera.init - A (1)\nsrc/thera/meta.py\n    M 88:4 DomainManager.handle_input - A (4)\n    C 51:0 DomainManager - A (3)\n    M 73:4 DomainManager.switch_domain - A (3)\n    C 26:0 Domain - A (2)\n    C 19:0 DomainType - A (1)\n    M 32:4 Domain.__init__ - A (1)\n    M 36:4 Domain.handle_input - A (1)\n    M 40:4 Domain.on_activate - A (1)\n    M 44:4 Domain.on_deactivate - A (1)\n    M 47:4 Domain.auto_switch - A (1)\n    M 54:4 DomainManager.__init__ - A (1)\n    M 59:4 DomainManager.register - A (1)\n    M 62:4 DomainManager.register_default_domains - A (1)\n    M 85:4 DomainManager.get_current_domain - A (1)\nsrc/thera/infra/llm.py\n    F 51:0 stream - B (7)\n    F 35:0 chat_str - A (3)\n    F 69:0 json_request - A (3)\n    F 87:0 get_embeddings - A (3)\n    F 157:0 evaluate_content_quality - A (3)\n    F 202:0 analyze_development_direction - A (3)\n    F 19:0 chat - A (2)\n    F 107:0 extract_triplets - A (2)\n    F 137:0 summarize_content - A (2)\n    F 181:0 evaluate_ttl_quality - A (2)\n    F 252:0 classify_and_draft - A (2)\n    F 14:0 create_client - A (1)\n    F 102:0 get_embedding - A (1)\n    F 234:0 deduplicate_entities - A (1)\nsrc/thera/infra/feishu.py\n    F 168:"
+    "raw": "src/thera/config.py\n    C 4:0 Settings - A (1)\nsrc/thera/__main__.py\n    F 188:0 get_app - A (2)\n    C 17:0 StorageState - A (2)\n    M 25:4 StorageState._validate_path - A (2)\n    M 35:4 StorageState.ensure_dirs - A (2)\n    M 56:4 StorageState.load_json - A (2)\n    M 72:4 StorageState.load_yaml - A (2)\n    C 82:0 Thera - A (2)\n    M 83:4 Thera.__init__ - A (2)\n    M 106:4 Thera.domain_manager - A (2)\n    M 112:4 Thera.storage - A (2)\n    M 117:4 Thera.switch_domain - A (2)\n    M 122:4 Thera.run - A (2)\n    F 196:0 main - A (1)\n    C 9:0 DomainType - A (1)\n    M 20:4 StorageState.__init__ - A (1)\n    M 31:4 StorageState.allowed_paths - A (1)\n    M 42:4 StorageState.get_data_dir - A (1)\n    M 49:4 StorageState.save_json - A (1)\n    M 65:4 StorageState.save_yaml - A (1)\n    M 90:4 Thera._default_storage_path - A (1)\n    M 94:4 Thera.init - A (1)\nsrc/thera/meta.py\n    M 88:4 DomainManager.handle_input - A (4)\n    C 51:0 DomainManager - A (3)\n    M 73:4 DomainManager.switch_domain - A (3)\n    C 26:0 Domain - A (2)\n    C 19:0 DomainType - A (1)\n    M 32:4 Domain.__init__ - A (1)\n    M 36:4 Domain.handle_input - A (1)\n    M 40:4 Domain.on_activate - A (1)\n    M 44:4 Domain.on_deactivate - A (1)\n    M 47:4 Domain.auto_switch - A (1)\n    M 54:4 DomainManager.__init__ - A (1)\n    M 59:4 DomainManager.register - A (1)\n    M 62:4 DomainManager.register_default_domains - A (1)\n    M 85:4 DomainManager.get_current_domain - A (1)\nsrc/thera/infra/feishu.py\n    F 168:0 save_document_content - C (13)\n    F 125:0 build_directory_tree - C (12)\n    F 215:0 block_type_to_markdown - C (12)\n    F 56:0 apply_style - B (8)\n    F 246:0 _text_block_to_markdown - B (8)\n    F 262:0 _heading_block_to_markdown - B (8)\n    F 278:0 _bullet_block_to_markdown - B (8)\n    F 294:0 _ordered_block_to_markdown - B (8)\n    F 310:0 _quote_block_to_markdown - B (8)\n    F 350:0 convert_directory - B (7)\n    F 79:0 block_to_dict - B (6)\n    F 342:0 get_safe_filename - A (5)\n    F 431:0 generate_jupyterbook_toc "
   },
   "dead_code": {
     "unused_code": [
       "src/thera/activity/memo.py:18: unused import 'generate_reasoning_report' (90% confidence)",
       "src/thera/activity/memo.py:25: unused import 'llm_analyze_direction' (90% confidence)",
-      "src/thera/domain/knowl.py:16: unused import 'get_embedding' (90% confidence)",
-      "src/thera/domain/knowl.py:16: unused import 'llm_chat_str' (90% confidence)",
-      "src/thera/domain/knowl.py:16: unused import 'llm_stream' (90% confidence)",
+      "src/thera/domain/knowl.py:12: unused import 'get_embedding' (90% confidence)",
+      "src/thera/domain/knowl.py:12: unused import 'llm_chat_str' (90% confidence)",
+      "src/thera/domain/knowl.py:12: unused import 'llm_stream' (90% confidence)",
       "src/thera/infra/feishu.py:16: unused import 'time' (90% confidence)"
     ],
-    "raw": "src/thera/activity/memo.py:18: unused import 'generate_reasoning_report' (90% confidence)\nsrc/thera/activity/memo.py:25: unused import 'llm_analyze_direction' (90% confidence)\nsrc/thera/domain/knowl.py:16: unused import 'get_embedding' (90% confidence)\nsrc/thera/domain/knowl.py:16: unused import 'llm_chat_str' (90% confidence)\nsrc/thera/domain/knowl.py:16: unused import 'llm_stream' (90% confidence)\nsrc/thera/infra/apple.py:140: unreachable code after 'return' (100% confidence)\nsrc/thera/infra/apple.py:156: unreachable code after 'return' (100% confidence)\nsrc/thera/infra/feishu.py:16: unused import 'time' (90% confidence)\n"
+    "raw": "src/thera/activity/memo.py:18: unused import 'generate_reasoning_report' (90% confidence)\nsrc/thera/activity/memo.py:25: unused import 'llm_analyze_direction' (90% confidence)\nsrc/thera/domain/knowl.py:12: unused import 'get_embedding' (90% confidence)\nsrc/thera/domain/knowl.py:12: unused import 'llm_chat_str' (90% confidence)\nsrc/thera/domain/knowl.py:12: unused import 'llm_stream' (90% confidence)\nsrc/thera/infra/apple.py:140: unreachable code after 'return' (100% confidence)\nsrc/thera/infra/apple.py:156: unreachable code after 'return' (100% confidence)\nsrc/thera/infra/feishu.py:16: unused import 'time' (90% confidence)\n"
   },
   "dependencies": {
     "dependencies": [],
@@ -68,16 +68,16 @@
     "evaluation_awareness": 7,
     "adjustment_awareness": 8,
     "strengths": [
-      "高度结构化的策略显性化（如‘最小干预’‘查询 index→执行→更新 index→验证’闭环流程）",
-      "强调整体系统一致性与责任边界（如 README 作为 single source of truth、权限分级、版本语义驱动变更决策）"
+      "高度结构化的策略意识：明确定义了人机协作范式、工作流程、权限边界和版本更新逻辑，具备清晰的元策略层级（原则→流程→边界→规范）",
+      "强调整体系统一致性与动态维护机制：如‘README 是 single source of truth’‘修改代码前先核对约定’‘更新代码需同步更新文档’，体现对认知闭环的主动设计"
     ],
     "weaknesses": [
-      "缺乏对代理自身认知状态的实时描述（如未说明‘何时意识到理解不足’‘如何判断需二次查询’等内省机制）",
-      "监控意识较弱：缺少对执行过程中的中间状态检查点定义（如‘验证构建成功’是终态检查，但无进度/依赖/风险预警类动态监控）"
+      "监控意识薄弱：缺乏对执行过程中的实时状态检查、进度反馈、异常信号识别等描述（如无‘若 index.md 冲突则暂停并提示’‘若构建验证失败应记录失败原因并回退’等监控触发点）",
+      "自我意识隐性化：文档始终以客观规范口吻书写，未出现第一人称或代理主体的反思性陈述（如‘我们曾因忽略 index 同步导致文档漂移，故新增第4条’），缺乏对自身认知局限或历史经验的显性标注"
     ],
     "recommendations": [
-      "在‘工作流程’中嵌入元认知提示点，例如在‘检查现状’后增加‘若配置逻辑模糊，主动请求用户澄清或标记不确定性’",
-      "补充轻量级监控契约，如‘每次修改前记录预期影响范围；修改后对比 diff 并标注高风险变更项’，将隐性评估显性化为可审计动作"
+      "在‘工作流程’或‘协作约束’中嵌入显式监控节点，例如：‘步骤4执行操作后，自动校验变更文件列表与需求范围是否一致；不一致则中断并生成差异报告’",
+      "在关键规范旁添加‘元注释块’（如 > 💡 元认知说明：本条源于上一迭代中3次 README-代码不一致引发的部署故障，现固化为预防性策略），将隐性经验转化为显性自我反思"
     ]
   }
 }

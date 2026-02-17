@@ -1,6 +1,6 @@
 # Domain 依赖分析报告
 
-- **生成时间**: 2026-02-18 01:28:16
+- **生成时间**: 2026-02-18 01:34:04
 
 ## 1. Domain 概览
 
@@ -9,7 +9,7 @@
 | write | WriteDomain | 4 | 2 |
 | connect | AuthoritySource, ConfirmationStatus, Context, ConnectDomain | 10 | 3 |
 | think | IdeaCategory, ThinkDomain | 11 | 5 |
-| knowl | DocType, KnowlDomain | 20 | 32 |
+| knowl | DocType, KnowlDomain | 20 | 33 |
 
 ## 2. 导入依赖详情
 
@@ -39,26 +39,27 @@
 
 **Thera 内部导入:**
 - `thera.config.settings`
-- `thera.infra.aigc.llm_chat_str`
-- `thera.infra.aigc.extract_keywords`
-- `thera.infra.aigc.extract_triplets`
-- `thera.infra.aigc.find_bridge_notes`
-- `thera.infra.aigc.find_cross_cluster_links`
-- `thera.infra.aigc.get_embedding`
-- `thera.infra.aigc.get_embeddings`
-- `thera.infra.aigc.llm_json_request`
-- `thera.infra.aigc.llm_stream`
+- `thera.infra.ai.llm_chat_str`
+- `thera.infra.ai.extract_keywords`
+- `thera.infra.ai.extract_triplets`
+- `thera.infra.ai.find_bridge_notes`
+- `thera.infra.ai.find_cross_cluster_links`
+- `thera.infra.ai.get_embedding`
+- `thera.infra.ai.get_embeddings`
+- `thera.infra.ai.llm_json_request`
+- `thera.infra.ai.llm_stream`
 - `thera.meta.Domain`
 - `thera.meta.DomainType`
-- `thera.infra.aigc.embedding_similarity`
-- `thera.infra.aigc.jaccard_similarity`
-- `thera.infra.aigc.keyword_similarity`
-- `thera.infra.aigc.tfidf_similarity`
-- `thera.infra.aigc._cluster_notes`
-- `thera.infra.aigc._extract_keywords`
-- `thera.infra.aigc._compute_cluster_centroids`
-- `thera.infra.aigc._find_bridge_notes`
-- `thera.infra.aigc._find_cross_cluster_links`
+- `thera.infra.ai.embedding_similarity`
+- `thera.infra.ai.get_embeddings`
+- `thera.infra.ai.jaccard_similarity`
+- `thera.infra.ai.keyword_similarity`
+- `thera.infra.ai.tfidf_similarity`
+- `thera.infra.ai._cluster_notes`
+- `thera.infra.ai._extract_keywords`
+- `thera.infra.ai._compute_cluster_centroids`
+- `thera.infra.ai._find_bridge_notes`
+- `thera.infra.ai._find_cross_cluster_links`
 
 **标准库/第三方导入:** 7 个
 
@@ -81,7 +82,7 @@ _无显式 Domain 间导入依赖_
 
 ## 6. 分析洞察
 
-- **依赖最多**: knowl (28 个导入)
+- **依赖最多**: knowl (29 个导入)
 
 **外部依赖:**
 - connect: enum
