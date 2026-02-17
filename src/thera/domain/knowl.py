@@ -117,6 +117,36 @@ def keyword_similarity(text1: str, text2: str) -> float:
     return intersection / union
 
 
+def _parse_json_response(response: str) -> dict[str, Any]:
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", response, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+    return {}
+
+
+def llm_json_request(prompt: str, system_prompt: str = "") -> dict[str, Any]:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    response = client.chat.completions.create(
+        model=settings.llm_model,
+        messages=messages,
+        temperature=0.7,
+    )
+
+    content = response.choices[0].message.content or ""
+    return _parse_json_response(content)
+
+
 def compute_all_similarities(articles: dict[str, dict]) -> dict:
     names = list(articles.keys())
     contents = [articles[n]["content"] for n in names]
