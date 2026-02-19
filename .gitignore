@@ -221,4 +221,18 @@ data/
 # IDE
 .vscode
 .idea
-.zed
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+target/
+
+# Flutter
+*.iml
+local.properties
+*.ipr
+*.iws
+.studio/
