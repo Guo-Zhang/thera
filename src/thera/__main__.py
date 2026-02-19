@@ -64,8 +64,10 @@ class StorageState:
 
 
 class Thera:
-    def __init__(self, storage_path: Path | None = None):
+    def __init__(self, storage_path: Path | None = None, workspace: str = "default"):
         self.storage_path = storage_path or self._default_storage_path()
+        self.workspace = workspace
+        self.workspace_path = self.storage_path / workspace
         self._storage = None
 
     @staticmethod
@@ -75,7 +77,8 @@ class Thera:
 
     def init(self):
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        self._storage = StorageState(self.storage_path)
+        self.workspace_path.mkdir(parents=True, exist_ok=True)
+        self._storage = StorageState(self.workspace_path)
         self._storage.ensure_dirs()
 
     def run(self):
@@ -105,7 +108,10 @@ class Thera:
                 yield Footer()
 
             def on_mount(self):
-                self.query_one("#chat-history").update("Welcome to Thera!\n")
+                ws = self.thera.workspace
+                self.query_one("#chat-history").update(
+                    f"Welcome to Thera! [workspace: {ws}]\n"
+                )
 
         app = TUIApp(thera=self)
         app.run()
@@ -122,10 +128,13 @@ def main():
 
     parser = argparse.ArgumentParser(description="Thera - AI Assistant")
     parser.add_argument("--storage", "-s", type=Path, help="Custom storage path")
+    parser.add_argument(
+        "--workspace", "-w", default="default", help="Workspace name (default: default)"
+    )
     parser.add_argument("--version", "-v", action="version", version="thera 0.1.0")
     args = parser.parse_args()
 
-    app = Thera(storage_path=args.storage)
+    app = Thera(storage_path=args.storage, workspace=args.workspace)
     app.init()
     app.run()
 
