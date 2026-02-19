@@ -19,8 +19,9 @@ dependencies = [
     "pyyaml>=6.0.3",
     "scikit-learn>=1.0.0",
     "textual>=6.11.0",
-    "quanttide-apple @ file://../packages/apple",
-    "quanttide-feishu @ file://../packages/feishu",
+    "quanttide-apple @ file:///Users/mac/repos/thera/packages/apple",
+    "quanttide-agent @ file:///Users/mac/repos/thera/packages/agent",
+    "quanttide-feishu @ file:///Users/mac/repos/thera/packages/feishu",
 ]
 
 [project.scripts]

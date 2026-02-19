@@ -18,18 +18,18 @@ import json
 from pathlib import Path
 from typing import Any
 
+from quanttide_agent import (
+    evaluate_content_quality as llm_evaluate_content,
+    evaluate_ttl_quality as llm_evaluate_ttl,
+    extract_triplets as llm_extract_triplets,
+    summarize_content as llm_summarize_content,
+)
 from thera.domain.knowl import (
     cluster_notes,
     embedding_similarity_matrix,
     extract_keywords,
     generate_report,
     get_embeddings,
-)
-from thera.infra.ai import (
-    evaluate_content_quality as llm_evaluate_content,
-    evaluate_ttl_quality as llm_evaluate_ttl,
-    extract_triplets as llm_extract_triplets,
-    summarize_content as llm_summarize_content,
 )
 
 

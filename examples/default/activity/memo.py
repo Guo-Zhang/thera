@@ -15,18 +15,18 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
+from quanttide_agent import (
+    analyze_development_direction as llm_analyze_direction,
+    classify_and_draft as llm_classify,
+    json_request as llm_json_request,
+    summarize_content as llm_summarize_content,
+)
 from thera.domain.knowl import (
     cluster_notes,
     embedding_similarity_matrix,
     extract_keywords,
     generate_reasoning_report,
     get_embeddings,
-)
-from thera.infra.ai import (
-    analyze_development_direction as llm_analyze_direction,
-    classify_and_draft as llm_classify,
-    json_request as llm_json_request,
-    summarize_content as llm_summarize_content,
 )
 
 

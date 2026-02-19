@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from thera.config import settings
-from thera.infra.ai import (
+from quanttide_agent import (
     chat_str as llm_chat_str,
+    embedding_similarity_matrix,
     extract_keywords,
     extract_triplets,
     find_bridge_notes,
@@ -65,7 +66,7 @@ def load_articles(docs_dir: Path) -> tuple[dict[str, dict], dict]:
 
 def compute_all_similarities(articles: dict[str, dict]) -> dict:
     import numpy as np
-    from thera.infra.ai import (
+    from quanttide_agent import (
         embedding_similarity,
         get_embeddings,
         jaccard_similarity,
@@ -328,13 +329,13 @@ def cluster_notes(
     similarity_matrix: list[list[float]],
     threshold: float = 0.5,
 ) -> list[list[int]]:
-    from thera.infra.ai import cluster_notes as _cluster_notes
+    from quanttide_agent import cluster_notes as _cluster_notes
 
     return _cluster_notes(similarity_matrix, threshold)
 
 
 def extract_keywords(texts: list[str], top_n: int = 15) -> list[str]:
-    from thera.infra.ai import extract_keywords as _extract_keywords
+    from quanttide_agent import extract_keywords as _extract_keywords
 
     return _extract_keywords(texts, top_n)
 
@@ -447,7 +448,7 @@ def generate_report(
 def compute_cluster_centroids(
     embeddings: list[list[float]], clusters: list[list[int]]
 ) -> list[list[float]]:
-    from thera.infra.ai import compute_cluster_centroids as _compute_cluster_centroids
+    from quanttide_agent import compute_cluster_centroids as _compute_cluster_centroids
 
     return _compute_cluster_centroids(embeddings, clusters)
 
@@ -455,7 +456,7 @@ def compute_cluster_centroids(
 def find_bridge_notes(
     embeddings: list[list[float]], clusters: list[list[int]], threshold: float = 0.3
 ) -> list[dict[str, Any]]:
-    from thera.infra.ai import find_bridge_notes as _find_bridge_notes
+    from quanttide_agent import find_bridge_notes as _find_bridge_notes
 
     return _find_bridge_notes(embeddings, clusters, threshold)
 
@@ -463,7 +464,7 @@ def find_bridge_notes(
 def find_cross_cluster_links(
     embeddings: list[list[float]], clusters: list[list[int]], top_n: int = 3
 ) -> list[dict[str, Any]]:
-    from thera.infra.ai import find_cross_cluster_links as _find_cross_cluster_links
+    from quanttide_agent import find_cross_cluster_links as _find_cross_cluster_links
 
     return _find_cross_cluster_links(embeddings, clusters, top_n)
 
