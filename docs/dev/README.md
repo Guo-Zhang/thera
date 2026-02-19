@@ -42,3 +42,24 @@ uv run python scripts/audit.py
 - 新增/重构模块后，补充对应 `docs/dev/` 文档
 - 文档记录实现逻辑与经验，不记录一次性运行输出
 - 输出报告放到 `data/activity/<module>/` 或 `docs/ops/reports/`
+
+## 参考项目
+
+### quanttide-profile-of-founder
+
+项目地址：https://github.com/quanttide/quanttide-profile-of-founder
+
+**可借鉴经验：**
+
+| 维度 | 项目实践 | 适用场景 |
+|------|----------|----------|
+| 目录命名 | 使用小写字母、复数形式（如 `think/`、`write/`） | 知识库/文档项目 |
+| 文件命名 | 小写字母、连字符分隔（如 `agent.md`） | 统一风格 |
+| 板块划分 | 按主题领域划分目录（think/agent/knowl/learn/stdn/write/code/brand/acad/product） | 知识分类 |
+| Markdown 规范 | ATX 标题、fenced code、列表使用 `-` 或 `1.` | 文档质量 |
+| 质量检查 | markdownlint 验证 + 链接/YAML 语法检查 | CI/CD |
+
+**与 thera 的对应关系：**
+
+- 该项目的板块（think/、write/、knowl/）对应 thera 的 Domain 模块
+- 该项目使用 Jupyter Book 构建，thera 可考虑类似的知识展示方案
