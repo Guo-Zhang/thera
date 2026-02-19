@@ -97,7 +97,7 @@ docs/
 
 ```bash
 # 导出“思考”文件夹备忘录到 data/infra/apple/notes.json
-uv run python -c "from thera.infra.apple import export_notes, get_default_output_dir; export_notes(get_default_output_dir())"
+uv run python -c "from quanttide_apple import export_notes; from pathlib import Path; export_notes('思考', Path('data/infra/apple/notes.json'))"
 
 # 执行 memo activity，输出到 data/activity/memo/
 uv run python -c "from thera.activity.memo import run_memo_activity; run_memo_activity()"
