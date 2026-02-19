@@ -20,6 +20,7 @@ dependencies = [
     "scikit-learn>=1.0.0",
     "textual>=6.11.0",
     "quanttide-apple @ file://../packages/apple",
+    "quanttide-feishu @ file://../packages/feishu",
 ]
 
 [project.scripts]
