@@ -11,14 +11,14 @@ python -m thera
 ## 启动参数
 
 ```bash
-# 指定默认 domain 启动
-uv run thera --domain think
+# 指定初始命令启动
+uv run thera --command /think
 
 # 指定数据目录
 uv run thera --storage /path/to/thera-data
 ```
 
-可选 domain：`think`、`write`、`knowl`、`connect`。
+可用命令：`/think`、`/write`、`/knowl`、`/connect`。
 
 ## 交互示例
 

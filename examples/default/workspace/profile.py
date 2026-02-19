@@ -24,7 +24,7 @@ from quanttide_agent import (
     extract_triplets as llm_extract_triplets,
     summarize_content as llm_summarize_content,
 )
-from thera.domain.knowl import (
+from thera.mode.knowl import (
     cluster_notes,
     embedding_similarity_matrix,
     extract_keywords,

@@ -4,14 +4,7 @@ import json
 import yaml
 from enum import Enum
 from pathlib import Path
-
-
-class DomainType(Enum):
-    CHAT = "chat"
-    THINK = "think"
-    WRITE = "write"
-    KNOWL = "knowl"
-    CONNECT = "connect"
+from typing import Callable
 
 
 class StorageState:
@@ -82,9 +75,10 @@ class StorageState:
 class Thera:
     def __init__(self, storage_path: Path | None = None):
         self.storage_path = storage_path or self._default_storage_path()
-        self._domain_manager = None
         self._storage = None
-        self._current_domain = None
+        self._handlers: dict[str, Callable] = {}
+        self._current_handler: Callable | None = None
+        self._history: list[dict] = []
 
     @staticmethod
     def _default_storage_path() -> Path:
@@ -92,34 +86,39 @@ class Thera:
         return home / "thera"
 
     def init(self):
-        from thera.meta import DomainManager
-
         self.storage_path.mkdir(parents=True, exist_ok=True)
-
         self._storage = StorageState(self.storage_path)
         self._storage.ensure_dirs()
+        self._register_default_handlers()
 
-        self._domain_manager = DomainManager(self)
-        self._domain_manager.register_default_domains()
+    def _register_default_handlers(self):
+        from thera.handlers import think, write, knowl, connect
 
-    @property
-    def domain_manager(self):
-        if not self._domain_manager:
-            raise RuntimeError("Thera not initialized. Call init() first.")
-        return self._domain_manager
+        self.register("/think", think.handle)
+        self.register("/write", write.handle)
+        self.register("/knowl", knowl.handle)
+        self.register("/connect", connect.handle)
 
-    @property
-    def storage(self):
-        if not self._storage:
-            raise RuntimeError("Thera not initialized. Call init() first.")
-        return self._storage
+    def register(self, command: str, handler: Callable):
+        self._handlers[command] = handler
 
-    def switch_domain(self, domain_type: str):
-        if not self._domain_manager:
-            raise RuntimeError("Thera not initialized. Call init() first.")
-        self._domain_manager.switch_domain(domain_type)
+    def handle(self, user_input: str) -> str:
+        self._history.append({"role": "user", "content": user_input})
 
-    def run(self, domain: str | None = None):
+        cmd = user_input.split()[0] if user_input else ""
+
+        if cmd in self._handlers:
+            self._current_handler = self._handlers[cmd]
+            response = self._current_handler(user_input)
+        elif self._current_handler:
+            response = self._current_handler(user_input)
+        else:
+            response = "请输入命令（如 /think, /write）或选择领域"
+
+        self._history.append({"role": "assistant", "content": response})
+        return response
+
+    def run(self, initial_command: str | None = None):
         from textual.app import App, ComposeResult
         from textual.containers import Container, VerticalScroll
         from textual.widgets import Header, Footer, Input, Static
@@ -142,18 +141,19 @@ class Thera:
             def __init__(self, thera):
                 super().__init__()
                 self.thera = thera
-                self.domain = "chat"
                 self._chat_content = ""
 
             def compose(self) -> ComposeResult:
                 yield Header()
                 yield Container(VerticalScroll(Static(id="chat-history", markup=True)))
-                yield Input(placeholder="Type your message...", id="user-input")
+                yield Input(
+                    placeholder="输入命令（如 /think, /write）...", id="user-input"
+                )
                 yield Footer()
 
             def on_mount(self):
-                self.thera.domain_manager.switch_domain(self.domain)
                 self._update_chat("Welcome to Thera!\n")
+                self._update_chat("可用命令: /think, /write, /knowl, /connect\n\n")
 
             def _update_chat(self, text: str):
                 self._chat_content += text
@@ -166,20 +166,21 @@ class Thera:
 
                 self._update_chat(f"\n> {user_input}\n")
 
-                suggested = self.thera.domain_manager.auto_switch(user_input)
-                if suggested:
-                    self.thera.domain_manager.switch_domain(suggested.value)
-                    self._update_chat(f"[切换到 {suggested.value} 领域]\n")
-
-                response = self.thera.domain_manager.handle_input(user_input)
+                response = self.thera.handle(user_input)
                 self._update_chat(f"{response}\n")
 
                 event.value = ""
 
         app = TUIApp(thera=self)
-        if domain:
-            self.switch_domain(domain)
+        if initial_command:
+            self.handle(initial_command)
         app.run()
+
+    @property
+    def storage(self):
+        if not self._storage:
+            raise RuntimeError("Thera not initialized. Call init() first.")
+        return self._storage
 
 
 _app_instance: Thera | None = None
@@ -198,10 +199,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="Thera - AI Assistant")
     parser.add_argument(
-        "--domain",
-        "-d",
-        choices=["think", "write", "knowl", "chat", "connect"],
-        help="Start in specific domain",
+        "--command",
+        "-c",
+        help="Initial command (e.g., /think, /write)",
     )
     parser.add_argument(
         "--storage",
@@ -220,7 +220,7 @@ def main():
     app = Thera(storage_path=args.storage)
     app.init()
 
-    app.run(domain=args.domain)
+    app.run(initial_command=args.command)
 
 
 if __name__ == "__main__":

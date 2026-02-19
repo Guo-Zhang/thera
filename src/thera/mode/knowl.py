@@ -8,6 +8,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from thera.config import settings
 from quanttide_agent import (
     chat_str as llm_chat_str,
@@ -21,7 +23,6 @@ from quanttide_agent import (
     json_request as llm_json_request,
     stream as llm_stream,
 )
-from thera.meta import Domain, DomainType
 
 
 class DocType(Enum):
@@ -515,69 +516,3 @@ def generate_reasoning_report(
         f.write("\n".join(md))
 
     return str(report_path)
-
-
-class KnowlDomain(Domain):
-    name = "knowl"
-    description = "知识工程域 - 知识图谱、RAG"
-
-    def __init__(self, app):
-        super().__init__(app)
-        self.articles = {}
-        self.sim_results = {}
-
-    def on_activate(self):
-        print(f"Activated: {self.name}")
-
-    def on_deactivate(self):
-        print(f"Deactivated: {self.name}")
-
-    def handle_input(self, user_input: str) -> str:
-        if user_input.startswith("/discover"):
-            return self._run_discovery()
-        return f"[Knowl] {user_input}"
-
-    def _run_discovery(self) -> str:
-        docs_dir = self.app.storage.base_path / "docs" / "fiction"
-        knowl_dir = self.app.storage.base_path / "knowl"
-
-        if not docs_dir.exists():
-            return f"Directory not found: {docs_dir}"
-
-        knowl_dir.mkdir(parents=True, exist_ok=True)
-
-        articles, doc_types = load_articles(docs_dir)
-        if not articles:
-            return f"No articles found in {docs_dir}"
-
-        self.sim_results = compute_all_similarities(articles)
-
-        sim_report = build_similarity_report(self.sim_results)
-        (knowl_dir / "similarity_report.md").write_text(sim_report, encoding="utf-8")
-
-        full_report = discover_with_llm(articles, self.sim_results, doc_types)
-        (knowl_dir / "knowledge_discovery.md").write_text(full_report, encoding="utf-8")
-
-        export_html(
-            knowl_dir / "knowledge_discovery.md", knowl_dir / "knowledge_discovery.html"
-        )
-
-        sim_json = {
-            "names": self.sim_results["names"],
-            "similarities": {
-                k: v.tolist() if isinstance(v, np.ndarray) else v
-                for k, v in self.sim_results["similarities"].items()
-            },
-        }
-        (knowl_dir / "similarity_data.json").write_text(
-            json.dumps(sim_json, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-
-        return f"Knowledge discovery completed. Reports saved to {knowl_dir}"
-
-    def auto_switch(self, user_input: str) -> DomainType | None:
-        if user_input.startswith("/think"):
-            return DomainType.THINK
-        if user_input.startswith("/write"):
-            return DomainType.WRITE
-        return None

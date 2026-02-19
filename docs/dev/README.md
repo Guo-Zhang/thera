@@ -25,7 +25,7 @@ uv sync --dev
 uv run pytest -v
 
 # 运行特定测试
-uv run pytest tests/test_think_domain.py -v
+uv run pytest tests/test_think_mode.py -v
 
 # 运行审计脚本
 uv run python scripts/audit.py
@@ -48,16 +48,16 @@ cd src/studio && flutter analyze
 
 - 入口：`src/thera/__main__.py`
 - 元模型：`src/thera/meta.py`
-- Domain：`src/thera/domain/`
+- Mode：`src/thera/mode/`
+- Handlers：`src/thera/handlers/`
 - Infra：`src/thera/infra/`
-- Activity：`src/thera/activity/`
-- State：`src/thera/state/`
+- Workspace：`examples/default/workspace/`
 
 ## 文档入口
 
-- 活动模块：`docs/dev/activity/`
+- 工作区模块：`docs/dev/workspace/`
 - 基础设施模块：`docs/dev/infra/`
-- 领域设计：`docs/dev/domain/`
+- Mode 设计：`docs/dev/mode/`
 - 元模型说明：`docs/dev/meta.md`
 - 主流程说明：`docs/dev/main.md`
 
@@ -65,7 +65,7 @@ cd src/studio && flutter analyze
 
 - 新增/重构模块后，补充对应 `docs/dev/` 文档
 - 文档记录实现逻辑与经验，不记录一次性运行输出
-- 输出报告放到 `data/activity/<module>/` 或 `docs/ops/reports/`
+- 输出报告放到 `data/workspace/<module>/` 或 `docs/ops/reports/`
 
 ## 参考项目
 
@@ -85,5 +85,5 @@ cd src/studio && flutter analyze
 
 **与 thera 的对应关系：**
 
-- 该项目的板块（think/、write/、knowl/）对应 thera 的 Domain 模块
+- 该项目的板块（think/、write/、knowl/）对应 thera 的 Mode 模块
 - 该项目使用 Jupyter Book 构建，thera 可考虑类似的知识展示方案
