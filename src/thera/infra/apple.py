@@ -3,259 +3,54 @@
 
 功能：导入本地苹果备忘录数据，存入项目数据目录的`/infra/apple` 文件夹。
 
-实现方案：使用 AppleScript 读取本地备忘录数据
-- 通过 osascript 调用系统 AppleScript
-- 支持获取指定文件夹的备忘录（如"思考"文件夹）
-- 支持通过 Shortcut 获取完整备忘录数据
-- 也支持手动导入 JSON 文件
+实现方案：
+- 使用 quanttide_apple 包提供的 Shortcuts 和 Notes 适配器
+- 也支持通过 Shortcut 获取完整备忘录数据
+- 支持手动导入 JSON 文件
 - 导出为 JSON 格式存储到 data/infra/apple/
 """
 
 import json
-import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from quanttide_apple import NotesAdapter as _NotesAdapter
+from quanttide_apple import run_shortcut as _run_shortcut
+from quanttide_apple.base import build_folder_tree as _build_folder_tree
+
+
+_notes_adapter = _NotesAdapter()
+
 
 def get_notes_folder_structure() -> List[Dict[str, Any]]:
     """获取备忘录文件夹元数据（含父级关系与条目数量）"""
-    script_lines = [
-        'tell application "Notes"',
-        "set folderData to {}",
-        "repeat with f in every folder",
-        "set folderId to (id of f) as string",
-        "set folderName to name of f",
-        "set noteCount to count of notes in f",
-        'set parentId to ""',
-        "try",
-        "set parentRef to container of f",
-        "if class of parentRef is folder then",
-        "set parentId to (id of parentRef) as string",
-        "end if",
-        "end try",
-        'set folderText to folderId & "|||" & folderName & "|||" & parentId & "|||" & (noteCount as string)',
-        "set end of folderData to folderText",
-        "end repeat",
-        "set oldDelims to AppleScript's text item delimiters",
-        "set AppleScript's text item delimiters to linefeed",
-        "set outputText to folderData as text",
-        "set AppleScript's text item delimiters to oldDelims",
-        "return outputText",
-        "end tell",
-    ]
-    args = ["osascript"]
-    for line in script_lines:
-        args.extend(["-e", line])
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if result.returncode != 0:
-            return []
-
-        output = result.stdout.strip()
-        if not output:
-            return []
-
-        folders = []
-        for item in output.splitlines():
-            parts = item.split("|||", 3)
-            if len(parts) != 4:
-                continue
-            folder_id, name, parent_id, count_text = parts
-            folder_id = folder_id.strip()
-            name = name.strip()
-            parent_id = parent_id.strip() or None
-            count_text = count_text.strip()
-            if not folder_id or not name:
-                continue
-            try:
-                note_count = int(count_text)
-            except ValueError:
-                note_count = 0
-            folders.append(
-                {
-                    "id": folder_id,
-                    "name": name,
-                    "parent_id": parent_id,
-                    "note_count": note_count,
-                }
-            )
-        return folders
-    except Exception:
-        return []
+    return _notes_adapter.get_folder_structure()
 
 
 def get_notes_from_folder(folder_name: str = "思考") -> List[Dict[str, Any]]:
     """获取指定文件夹的备忘录（包含标题和内容）"""
-    script_lines = [
-        'tell application "Notes"',
-        "set noteData to {}",
-        f'set targetFolder to folder "{folder_name}"',
-        "repeat with n in every note in targetFolder",
-        "set noteTitle to name of n",
-        "set noteBody to plaintext of n",
-        'set noteText to "###" & noteTitle & "###" & noteBody',
-        "set end of noteData to noteText",
-        "end repeat",
-        "return noteData",
-        "end tell",
-    ]
-    args = ["osascript"]
-    for line in script_lines:
-        args.extend(["-e", line])
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-        if result.returncode != 0:
-            return []
-
-        output = result.stdout.strip()
-        if not output:
-            return []
-
-        notes = []
-        items = output.split(", ###")
-        for item in items:
-            if "###" in item:
-                parts = item.split("###", 1)
-                if len(parts) == 2:
-                    title, body = parts
-                    title = title.strip()
-                    if title:
-                        notes.append({"title": title, "body": body.strip()})
-
-        return notes
-    except Exception:
-        return []
-
-        output = result.stdout.strip()
-        if not output:
-            return []
-
-        notes = []
-        for item in output.split(", "):
-            if "###" in item:
-                parts = item.split("###", 1)
-                if len(parts) == 2:
-                    title, body = parts
-                    notes.append({"title": title.strip(), "body": body.strip()})
-
-        return notes
-    except Exception:
-        return []
-
-        output = result.stdout.strip()
-        if not output:
-            return []
-
-        notes = []
-        current_note = {}
-        for line in output.split("\n"):
-            if line.startswith("title:"):
-                if current_note:
-                    notes.append(current_note)
-                title = line.replace("title:", "").strip()
-                title = title.strip('"')
-                current_note = {"title": title, "body": ""}
-            elif line.startswith("body:"):
-                body = line.replace("body:", "").strip()
-                body = body.strip('"')
-                current_note["body"] = body
-
-        if current_note:
-            notes.append(current_note)
-
-        return notes
-    except Exception:
-        return []
+    return _notes_adapter.fetch(folder=folder_name)
 
 
 def get_note_names(limit: int = 10) -> List[str]:
-    """获取备忘录标题（默认获取前100条）"""
-    script_lines = [
-        'tell application "Notes"',
-        f"set n to notes 1 thru {limit}",
-        "set names to {}",
-        "repeat with x in n",
-        "set end of names to name of x",
-        "end repeat",
-        "return names",
-        "end tell",
-    ]
-    args = ["osascript"]
-    for line in script_lines:
-        args.extend(["-e", line])
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if result.returncode != 0:
-            return []
-        names = result.stdout.strip().split(", ")
-        return [n.strip() for n in names if n.strip()]
-    except Exception:
-        return []
+    """获取备忘录标题（默认获取前10条）"""
+    return _notes_adapter.get_note_names(limit=limit)
 
 
 def run_shortcut(shortcut_name: str = "GetAllNotes") -> Optional[str]:
     """运行 Shortcut 获取备忘录"""
-    try:
-        result = subprocess.run(
-            ["shortcuts", "run", shortcut_name],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            return None
-        return result.stdout
-    except Exception:
-        return None
+    return _run_shortcut(shortcut_name)
 
 
 def export_notes(output_dir: Path, folder_name: str = "思考") -> Dict[str, Any]:
     """导出备忘录到 JSON 文件（默认获取"思考"文件夹）"""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    notes = []
-
-    json_output = run_shortcut()
-    if json_output:
-        try:
-            data = json.loads(json_output)
-            if isinstance(data, list):
-                notes = data
-        except json.JSONDecodeError:
-            pass
-
-    if not notes:
-        notes = get_notes_from_folder(folder_name)
-
-    if not notes:
-        names = get_note_names()
-        notes = [{"title": name, "body": ""} for name in names]
-
-    result = {
-        "export_date": datetime.now().isoformat(),
-        "total_count": len(notes),
-        "notes": notes,
-    }
-
     output_file = output_dir / "notes.json"
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+
+    adapter = _NotesAdapter()
+    result = adapter.export(folder=folder_name, output_path=output_file)
 
     return result
 
@@ -328,27 +123,7 @@ def get_default_output_dir() -> Path:
 
 def build_folder_tree(folders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """将扁平文件夹列表转换为树结构"""
-    nodes: Dict[str, Dict[str, Any]] = {}
-    for folder in folders:
-        node = {
-            "id": folder.get("id"),
-            "name": folder.get("name"),
-            "parent_id": folder.get("parent_id"),
-            "note_count": folder.get("note_count", 0),
-            "children": [],
-        }
-        folder_id = node["id"]
-        if isinstance(folder_id, str) and folder_id:
-            nodes[folder_id] = node
-
-    roots: List[Dict[str, Any]] = []
-    for node in nodes.values():
-        parent_id = node.get("parent_id")
-        if isinstance(parent_id, str) and parent_id in nodes:
-            nodes[parent_id]["children"].append(node)
-        else:
-            roots.append(node)
-    return roots
+    return _build_folder_tree(folders)
 
 
 def export_folder_structure(output_dir: Path) -> Dict[str, Any]:
