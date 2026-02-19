@@ -4,7 +4,18 @@
 
 记录 thera 的架构设计、模块实现、开发约束与经验沉淀。
 
+## 架构概览
+
+| 项目 | 职责 | 技术栈 |
+|------|------|--------|
+| **thera** | 处理程序、生成 data | Python CLI |
+| **studio** | 使用 data、交互展示 | Flutter |
+
+**数据流：** `thera (生成) → data/ → studio (消费)`
+
 ## 开发命令
+
+### thera
 
 ```bash
 # 安装依赖
@@ -18,6 +29,19 @@ uv run pytest tests/test_think_domain.py -v
 
 # 运行审计脚本
 uv run python scripts/audit.py
+```
+
+### studio
+
+```bash
+# 启动 Flutter 应用
+./scripts/run-studio.sh
+
+# 指定设备 (macos/chrome)
+./scripts/run-studio.sh chrome
+
+# 代码分析
+cd src/studio && flutter analyze
 ```
 
 ## 核心模块
