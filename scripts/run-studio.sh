@@ -11,5 +11,7 @@ fi
 
 cd "$STUDIO_DIR"
 
-echo "Running Flutter app..."
-flutter run
+DEVICE="${1:-chrome}"
+
+echo "Running Flutter app on $DEVICE..."
+flutter run -d "$DEVICE"
