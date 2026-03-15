@@ -1,6 +1,5 @@
-from thera.__main__ import Thera, main
+from thera.cli import main
 
 __all__ = [
-    "Thera",
     "main",
 ]

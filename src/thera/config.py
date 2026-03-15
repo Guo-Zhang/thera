@@ -1,23 +1,20 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def get_platform_root() -> Path:
+    return Path(__file__).parent.parent.parent
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=str(get_platform_root() / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
-    # 环境变量
-    neo4j_uri: str
-    neo4j_user: str
-    neo4j_password: str
-    neo4j_database: str = "neo4j"
-    neo4j_index_name: str = "thera"
-
-    llm_api_key: str
-    llm_base_url: str
-    llm_model: str
-    llm_embedding_model: str
-    llm_reranker_model: str
+    opencode_path: str
 
 
 settings = Settings()

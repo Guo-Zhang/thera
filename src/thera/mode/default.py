@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +42,8 @@ def write_file(file_path: str, content: str) -> str:
 class JournalProcessor:
     """日志处理器"""
 
-    def __init__(self, config: DefaultConfig, llm_client: LLMClient | None = None):
-        self.config = config
-        self.llm = llm_client or LLMClient(config)
+    def __init__(self, llm_client: LLMClient | None = None):
+        self.llm = llm_client or LLMClient()
 
     def process(self, file_path: str) -> str:
         """处理日志文件"""
@@ -94,9 +92,10 @@ class JournalProcessor:
 class LLMClient:
     """LLM 客户端"""
 
-    def __init__(self, config: DefaultConfig):
-        self.config = config
-        self.opencode_path = config.opencode_path
+    def __init__(self):
+        from thera.config import settings
+
+        self.opencode_path = settings.opencode_path
 
     def get_annotation(self, text: str) -> str:
         """调用 opencode 获取批注"""
@@ -106,7 +105,7 @@ class LLMClient:
 
         try:
             result = subprocess.run(
-                [self.opencode_path, "-p", prompt],
+                [self.opencode_path, "run", prompt],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -148,28 +147,3 @@ class LLMClient:
 2. 标签使用 # 前缀
 3. 提炼要简洁，不超过 50 字
 4. 非必填项可省略"""
-
-
-@dataclass
-class DefaultConfig:
-    """默认活动配置"""
-
-    opencode_path: str = "/usr/local/bin/opencode"
-    model: str = "o4-mini"
-    max_retries: int = 3
-
-
-def load_default_config(config_path: str = "config.yaml") -> DefaultConfig:
-    """从 config.yaml 加载配置"""
-    import yaml
-
-    config_file = Path(config_path)
-    if config_file.exists():
-        with open(config_file) as f:
-            data = yaml.safe_load(f) or {}
-        return DefaultConfig(
-            opencode_path=data.get("opencode_path", "/usr/local/bin/opencode"),
-            model=data.get("model", "o4-mini"),
-            max_retries=data.get("max_retries", 3),
-        )
-    return DefaultConfig()
