@@ -38,15 +38,22 @@ class JournalProcessor:
     def process(self, file_path: str):
         content = read_file(file_path)
         paragraphs = split_paragraphs(content)
+        new_content_parts = []
         
         for para in paragraphs:
             if is_already_annotated(para) or is_short(para):
+                new_content_parts.append(para)
                 continue
             
             annotation = self.llm.get_annotation(para)
             if annotation != "SKIP":
-                update_file(file_path, para, annotation)
-```
+                updated_para = f"{para}\n\n{annotation}"
+                new_content_parts.append(updated_para)
+            else:
+                new_content_parts.append(para)
+        
+        # 全量写回，保证原子性
+        write_file(file_path, '\n\n'.join(new_content_parts))
 
 ### 3. LLM 客户端
 
@@ -82,7 +89,7 @@ class Config:
 - 过滤：忽略只有标点、代码块或过短（<20字）的段落
 
 ### 2. 状态检测
-- 检查每个段落末尾是否已存在 `> **🤖 观察者注**` 标记
+- 检查每个段落是否已存在 `🤖 观察者注` 标记（注意：不加粗体，与 Prompt 输出保持一致）
 - 已存在 → 跳过（保持幂等性）
 - 不存在 → 标记为"待观察段落"
 
@@ -112,14 +119,14 @@ class Config:
 
 如果它只是无意义的闲聊或过渡语，请输出：SKIP
 
-如果它包含洞察、决策或风险，请按以下格式输出批注：
-🤖 观察者注
-🏷️ 标签：<分类1> <分类2>
-💎 提炼：<提取的标准化知识>
-⚠️ 状态：<状态说明>
-🔗 关联：<关联说明>
-🔑 关键：<关键要点>
-🔄 模式：<模式说明>
+如果它包含洞察、决策或风险，请按以下格式输出批注（使用引用语法 >）：
+> 🤖 观察者注
+> 🏷️ 标签：<分类1> <分类2>
+> 💎 提炼：<提取的标准化知识>
+> ⚠️ 状态：<状态说明>
+> 🔗 关联：<关联说明>
+> 🔑 关键：<关键要点>
+> 🔄 模式：<模式说明>
 
 注意：
 1. 只输出批注内容，不要修改原文
@@ -154,7 +161,7 @@ def process_journal(file_path):
     write_file(file_path, '\n\n'.join(new_content_parts))
 
 def is_already_annotated(text):
-    return "**🤖 观察者注**" in text
+    return "🤖 观察者注" in text
 ```
 
 ## 格式规范
