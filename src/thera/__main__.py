@@ -128,38 +128,27 @@ def main():
     from pathlib import Path
 
     parser = argparse.ArgumentParser(description="Thera - AI Assistant")
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # 默认活动子命令
-    default_parser = subparsers.add_parser("default", help="增量式被动观察")
-    default_parser.add_argument("file", help="日志文件路径")
-    default_parser.add_argument(
-        "--config", "-c", default="config.yaml", help="配置文件路径"
-    )
-
-    # TUI 模式
+    parser.add_argument("file", nargs="?", help="日志文件路径（用于 default 命令）")
+    parser.add_argument("command", nargs="?", help="子命令（default 或空）")
     parser.add_argument("--storage", "-s", type=Path, help="Custom storage path")
     parser.add_argument(
         "--workspace", "-w", default="default", help="Workspace name (default: default)"
     )
     parser.add_argument("--version", "-v", action="version", version="thera 0.1.0")
+    parser.add_argument("--config", "-c", default="config.yaml", help="配置文件路径")
     args = parser.parse_args()
 
     # 处理 default 子命令
-    if args.command == "default":
+    if args.file and not args.file.startswith("-"):
+        # file 参数是位置参数，检查是否是 default 命令
         import sys
 
-        # 直接导入 default 模块，绕过 mode/__init__.py
-        default_module_path = Path(__file__).parent / "mode" / "default.py"
-        spec = __import__("importlib.util").util.spec_from_file_location(
-            "default_module", default_module_path
-        )
-        default_module = __import__("importlib.util").util.module_from_spec(spec)
-        sys.modules["default_module"] = default_module
-        spec.loader.exec_module(default_module)
+        sys.path.insert(0, str(Path(__file__).parent / "mode"))
 
-        config = default_module.load_default_config(args.config)
-        processor = default_module.JournalProcessor(config)
+        from default import JournalProcessor, load_default_config
+
+        config = load_default_config(args.config)
+        processor = JournalProcessor(config)
         processor.process(args.file)
         return
 
