@@ -9,6 +9,72 @@
 - **输入**：原始工作日志（Markdown 格式）
 - **输出**：带嵌入式批注的日志（保留原文，在段落末尾插入批注）
 
+## 模块规划
+
+### 1. 命令行入口
+
+文件：`src/thera/cli.py`
+
+```python
+def main():
+    parser = argparse.ArgumentParser(description='增量式被动观察')
+    parser.add_argument('file', help='日志文件路径')
+    args = parser.parse_args()
+    
+    processor = JournalProcessor()
+    processor.process(args.file)
+```
+
+### 2. 核心处理器
+
+文件：`src/thera/processor.py`
+
+```python
+class JournalProcessor:
+    def __init__(self, config: Config):
+        self.config = config
+        self.llm = LLMClient(config)
+    
+    def process(self, file_path: str):
+        content = read_file(file_path)
+        paragraphs = split_paragraphs(content)
+        
+        for para in paragraphs:
+            if is_already_annotated(para) or is_short(para):
+                continue
+            
+            annotation = self.llm.get_annotation(para)
+            if annotation != "SKIP":
+                update_file(file_path, para, annotation)
+```
+
+### 3. LLM 客户端
+
+文件：`src/thera/llm.py`
+
+```python
+class LLMClient:
+    def __init__(self, config: Config):
+        self.config = config
+        self.opencode_path = config.opencode_path
+    
+    def get_annotation(self, text: str) -> str:
+        # 调用 opencode 获取批注
+        pass
+```
+
+### 4. 配置文件
+
+文件：`src/thera/config.py`
+
+```python
+@dataclass
+class Config:
+    opencode_path: str = "/usr/local/bin/opencode"
+    model: str = "o4-mini"
+    max_retries: int = 3
+```
+
 ## 处理逻辑
 
 ### 1. 段落切分
@@ -27,6 +93,40 @@
 ### 4. 合成回写
 - 将原文段落 + AI 生成的批注拼接
 - 写回文件
+
+## Prompt
+
+### 系统 Prompt
+
+```
+你是一个安静的观察者。你的任务是为用户的工作日志添加结构化批注。
+```
+
+### 用户 Prompt
+
+```
+阅读以下段落，判断其核心价值。
+
+段落内容：
+{paragraph}
+
+如果它只是无意义的闲聊或过渡语，请输出：SKIP
+
+如果它包含洞察、决策或风险，请按以下格式输出批注：
+🤖 观察者注
+🏷️ 标签：<分类1> <分类2>
+💎 提炼：<提取的标准化知识>
+⚠️ 状态：<状态说明>
+🔗 关联：<关联说明>
+🔑 关键：<关键要点>
+🔄 模式：<模式说明>
+
+注意：
+1. 只输出批注内容，不要修改原文
+2. 标签使用 # 前缀
+3. 提炼要简洁，不超过 50 字
+4. 非必填项可省略
+```
 
 ## 伪代码
 
@@ -72,26 +172,40 @@ def is_already_annotated(text):
 手动触发：在终端执行以下命令：
 
 ```bash
-python agent.py design-log.md
+python -m thera.cli <file-path>
 ```
 
 ## 配置文件
 
-- **opencode 路径**：本地 opencode 可执行文件路径（需用户配置）
+文件：`config.yaml`
+
+```yaml
+opencode_path: /usr/local/bin/opencode
+model: o4-mini
+max_retries: 3
+```
 
 ## 错误处理
 
 - **opencode 获取异常**：处理 opencode 调用失败的情况，包括网络异常、响应解析错误等
+- 重试机制：默认重试 3 次
+- 跳过策略：异常段落记录日志后继续处理下一段
 
 ## 成本控制
 
 使用 opencode 免费模型，暂无 Token 限制。
 
-## 模块规划
-
-待定（需要进一步明确业务逻辑后确定模块划分）
-
 ## 测试 Fixture
 
 - 输入：`tests/fixtures/default/journal_2026-03-15_input.md`
 - 输出：`tests/fixtures/default/journal_2026-03-15_output.md`
+
+## 开发步骤
+
+1. 创建 `src/thera/` 目录结构
+2. 实现 `config.py` 配置类
+3. 实现 `llm.py` OpenCode 客户端
+4. 实现 `processor.py` 核心处理器
+5. 实现 `cli.py` 命令行入口
+6. 编写单元测试
+7. 集成测试
