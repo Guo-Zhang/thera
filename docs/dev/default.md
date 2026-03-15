@@ -21,7 +21,10 @@ def main():
     parser.add_argument('file', help='日志文件路径')
     args = parser.parse_args()
     
-    processor = JournalProcessor()
+    # 加载配置
+    config = load_config()
+    
+    processor = JournalProcessor(config)
     processor.process(args.file)
 ```
 
@@ -80,6 +83,13 @@ class Config:
     opencode_path: str = "/usr/local/bin/opencode"
     model: str = "o4-mini"
     max_retries: int = 3
+
+def load_config() -> Config:
+    """从 config.yaml 加载配置"""
+    import yaml
+    with open('config.yaml') as f:
+        data = yaml.safe_load(f)
+    return Config(**data)
 ```
 
 ## 处理逻辑
@@ -87,6 +97,14 @@ class Config:
 ### 1. 段落切分
 - 按 `\n\n`（空行）将全文切分为多个"逻辑段落"
 - 过滤：忽略只有标点、代码块或过短（<20字）的段落
+- 过滤：忽略空字符串段落（连续空行产生）
+
+```python
+def split_paragraphs(content: str) -> list[str]:
+    paragraphs = content.split('\n\n')
+    # 过滤空字符串和纯空白段落
+    return [p.strip() for p in paragraphs if p.strip()]
+```
 
 ### 2. 状态检测
 - 检查每个段落是否已存在 `🤖 观察者注` 标记（注意：不加粗体，与 Prompt 输出保持一致）
