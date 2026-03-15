@@ -18,7 +18,11 @@ uv run thera --command /think
 uv run thera --storage /path/to/thera-data
 ```
 
-可用命令：`/think`、`/write`、`/knowl`、`/connect`。
+可用命令：`/think`、`/write`、`/knowl`、`/connect`、`/default`。
+
+## 功能文档
+
+- [默认活动](default.md)：增量式被动观察，为工作日志添加 AI 批注
 
 ## 交互示例
 
