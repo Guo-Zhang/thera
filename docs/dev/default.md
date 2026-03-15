@@ -87,6 +87,10 @@ python agent.py design-log.md
 
 使用 opencode 免费模型，暂无 Token 限制。
 
+## 模块规划
+
+待定（需要进一步明确业务逻辑后确定模块划分）
+
 ## 测试 Fixture
 
 - 输入：`tests/fixtures/default/journal_2026-03-15_input.md`
