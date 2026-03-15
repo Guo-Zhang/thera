@@ -146,10 +146,20 @@ def main():
 
     # 处理 default 子命令
     if args.command == "default":
-        from thera.mode.default import JournalProcessor, load_default_config
+        import sys
+        from pathlib import Path
 
-        config = load_default_config(args.config)
-        processor = JournalProcessor(config)
+        # 直接导入 default 模块，绕过 mode/__init__.py
+        default_module_path = Path(__file__).parent / "mode" / "default.py"
+        spec = __import__("importlib.util").util.spec_from_file_location(
+            "default_module", default_module_path
+        )
+        default_module = __import__("importlib.util").util.module_from_spec(spec)
+        sys.modules["default_module"] = default_module
+        spec.loader.exec_module(default_module)
+
+        config = default_module.load_default_config(args.config)
+        processor = default_module.JournalProcessor(config)
         processor.process(args.file)
         return
 
