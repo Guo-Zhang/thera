@@ -69,7 +69,7 @@
 
 ### 5.1 触发方式
 
-手动触发：`python agent.py <file-path>`
+手动触发：`python -m thera.cli <file-path>`
 
 ### 5.2 错误处理
 
@@ -84,7 +84,7 @@
 
 ### 一期（当前）
 
-- 手动触发：`python agent.py <file-path>`
+- 手动触发：`python -m thera.cli <file-path>`
 
 ### 二期（待定）
 
