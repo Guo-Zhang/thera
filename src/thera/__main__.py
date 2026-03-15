@@ -127,6 +127,16 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Thera - AI Assistant")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # 默认活动子命令
+    default_parser = subparsers.add_parser("default", help="增量式被动观察")
+    default_parser.add_argument("file", help="日志文件路径")
+    default_parser.add_argument(
+        "--config", "-c", default="config.yaml", help="配置文件路径"
+    )
+
+    # TUI 模式
     parser.add_argument("--storage", "-s", type=Path, help="Custom storage path")
     parser.add_argument(
         "--workspace", "-w", default="default", help="Workspace name (default: default)"
@@ -134,6 +144,16 @@ def main():
     parser.add_argument("--version", "-v", action="version", version="thera 0.1.0")
     args = parser.parse_args()
 
+    # 处理 default 子命令
+    if args.command == "default":
+        from thera.mode.default import JournalProcessor, load_default_config
+
+        config = load_default_config(args.config)
+        processor = JournalProcessor(config)
+        processor.process(args.file)
+        return
+
+    # 默认启动 TUI
     app = Thera(storage_path=args.storage, workspace=args.workspace)
     app.init()
     app.run()
