@@ -125,6 +125,7 @@ class Thera:
 
 def main():
     import argparse
+    from pathlib import Path
 
     parser = argparse.ArgumentParser(description="Thera - AI Assistant")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -147,7 +148,6 @@ def main():
     # 处理 default 子命令
     if args.command == "default":
         import sys
-        from pathlib import Path
 
         # 直接导入 default 模块，绕过 mode/__init__.py
         default_module_path = Path(__file__).parent / "mode" / "default.py"
