@@ -24,13 +24,14 @@ def main():
     # 加载配置
     config = load_config()
     
+    from thera.mode.default import JournalProcessor
     processor = JournalProcessor(config)
     processor.process(args.file)
 ```
 
 ### 2. 核心处理器
 
-文件：`src/thera/processor.py`
+文件：`src/thera/mode/default.py`
 
 ```python
 class JournalProcessor:
@@ -230,7 +231,7 @@ max_retries: 3
 1. 创建 `src/thera/` 目录结构
 2. 实现 `config.py` 配置类
 3. 实现 `llm.py` OpenCode 客户端
-4. 实现 `processor.py` 核心处理器
+4. 实现 `mode/default.py` 核心处理器
 5. 实现 `cli.py` 命令行入口
 6. 编写单元测试
 7. 集成测试
