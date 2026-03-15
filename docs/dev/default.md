@@ -67,6 +67,26 @@ def is_already_annotated(text):
 - 🔑 关键：关键要点
 - 🔄 模式：模式说明
 
+## 触发机制
+
+手动触发：在终端执行以下命令：
+
+```bash
+python agent.py design-log.md
+```
+
+## 配置文件
+
+- **opencode 路径**：本地 opencode 可执行文件路径（需用户配置）
+
+## 错误处理
+
+- **opencode 获取异常**：处理 opencode 调用失败的情况，包括网络异常、响应解析错误等
+
+## 成本控制
+
+使用 opencode 免费模型，暂无 Token 限制。
+
 ## 测试 Fixture
 
 - 输入：`tests/fixtures/default/journal_2026-03-15_input.md`
