@@ -1,3 +1,0 @@
-"""
-quanttide-feishu tests
-"""

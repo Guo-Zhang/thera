@@ -1,3 +1,0 @@
-"""
-quanttide-apple tests
-"""
