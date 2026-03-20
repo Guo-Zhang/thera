@@ -5,14 +5,17 @@
 ## 使用方法
 
 ```bash
-# 设置 PYTHONPATH
-export PYTHONPATH=src/thera/src
+# 进入 thera 目录
+cd src/thera
+
+# 激活虚拟环境
+source .venv/bin/activate
 
 # 仅显示变更（不提交）
-python3 src/thera/src/thera/cli.py auto-commit --dry-run
+python src/thera/cli.py auto-commit --dry-run
 
 # 交互式提交推送
-python3 src/thera/src/thera/cli.py auto-commit
+python src/thera/cli.py auto-commit
 ```
 
 ## 工作流程
@@ -30,12 +33,6 @@ python3 src/thera/src/thera/cli.py auto-commit
 | 子模块 | `[{type}] {files}` | `[docs] README.md, tutorial/*.md` |
 | 主仓库 | `[sync] [{type}] {files}, ...` | `[sync] [config] .gitmodules` |
 
-## 日志格式
-
-```
-- 17:30 OK main: [code] src/thera, [meta] journal/*.md
-```
-
 ## 退出码
 
 | 退出码 | 含义 |
@@ -47,32 +44,35 @@ python3 src/thera/src/thera/cli.py auto-commit
 
 ```bash
 # 检测变更
-$ python3 src/thera/src/thera/cli.py auto-commit --dry-run
-Scanning repository: /path/to/repo
-
+$ python src/thera/cli.py auto-commit --dry-run
 Detected changes:
 --------------------------------------------------
-[主仓库]
-  [code] src/thera, [root] README.md
-
-[docs/tutorial]
-  [root] intro.md
+主仓库: 2 个文件
+  MODIFIED: src/thera/cli.py
+  UNTRACKED: scripts/
 --------------------------------------------------
 
 Dry run - no changes made.
 
 # 实际提交
-$ python3 src/thera/src/thera/cli.py auto-commit
-...
-Commit and push these changes? [y/N/q]: y
->>> 处理 docs/tutorial...
-  commit: [root] intro.md...
-[OK] docs/tutorial pushed
+$ python src/thera/cli.py auto-commit
+Detected changes:
+--------------------------------------------------
+主仓库: 2 个文件
+  MODIFIED: src/thera/cli.py
+  UNTRACKED: scripts/
+--------------------------------------------------
 
+Commit and push these changes? [y/N/q]: y
 >>> 处理 主仓库...
-  commit: [sync] [code] src/thera, [root] README.md...
 [OK] 主仓库 pushed
 
-[JOURNAL] Updated meta/journal/2026-03-20.md
 [ALL DONE] All changes committed and pushed.
 ```
+
+## 状态机集成
+
+auto-commit 与状态机集成，确保操作的安全性：
+
+- 在非 SYNCED 状态下，自动触发状态转移
+- 推送失败时进入错误状态，便于问题排查
