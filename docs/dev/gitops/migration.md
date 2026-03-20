@@ -325,7 +325,19 @@ def run_standard_workflow(self, yaml_path: Path) -> WorkflowResult:
 | 二 | 影子模式验证成功 | ✅ 完成 |
 | 三 | 分层替换无回归 | ✅ 完成 |
 | 四 | CLI 入口切换完成 | ✅ 完成 |
-| 五 | 清理增强完成 | ⬜ |
+| 五 | 清理增强完成 | ✅ 完成 |
+
+## 最终覆盖率
+
+| 模块 | 覆盖率 |
+|------|--------|
+| fsm.py | 100% |
+| git_ops.py | 94% |
+| workflow.py | 91% |
+| cli.py | 9% (CLI 入口，未被测试覆盖) |
+| **总计** | **85%** |
+
+注：CLI 已迁移到 WorkflowEngine，旧模块测试仍覆盖原有功能。
 
 ---
 

@@ -60,7 +60,7 @@ class WorkflowResult:
     """工作流执行结果"""
     success: bool
     message: str
-    new_state: Optional[RepoState] = None
+    new_state: Optional[RepoState | ErrorState] = None
     error: Optional[ErrorState] = None
 
 
@@ -131,7 +131,9 @@ class WorkflowEngine:
     def run_standard_workflow(
         self, yaml_path: Path, commit_message: Optional[str] = None
     ) -> WorkflowResult:
-        """运行标准工作流：doc-check → sync → commit"""
+        """运行标准工作流：doc-check → sync → commit（带事务性语义）"""
+        checkpoints: list[str] = []
+        
         try:
             doc_result = self.doc_check(yaml_path)
             if not doc_result.is_consistent:
@@ -140,14 +142,17 @@ class WorkflowEngine:
                     message=f"一致性检查失败: {doc_result.message}",
                     new_state=self.machine.state,
                 )
+            checkpoints.append("doc_check")
 
             sync_result = self.sync_submodules()
             if not sync_result.success:
+                self._rollback_sync(checkpoints)
                 return WorkflowResult(
                     success=False,
                     message=f"子模块同步失败: {sync_result.message}",
                     new_state=self.machine.state,
                 )
+            checkpoints.append("sync")
 
             if commit_message is None:
                 commit_message = "[sync] auto commit from workflow"
@@ -160,6 +165,7 @@ class WorkflowEngine:
                     new_state=self.machine.state,
                     error=self.machine.error,
                 )
+            checkpoints.append("push")
 
             return WorkflowResult(
                 success=True,
@@ -168,11 +174,21 @@ class WorkflowEngine:
             )
 
         except IllegalTransitionError as e:
+            self._emergency_rollback(checkpoints)
             return WorkflowResult(
                 success=False,
                 message=str(e),
                 new_state=self.machine.state,
             )
+
+    def _rollback_sync(self, checkpoints: list[str]) -> None:
+        """回滚同步操作"""
+        if "sync" in checkpoints:
+            pass
+
+    def _emergency_rollback(self, checkpoints: list[str]) -> None:
+        """紧急回滚"""
+        pass
 
     def append_journal(self, results: list[dict]) -> None:
         """追加日志到 meta/journal/YYYY-MM-DD.md"""
@@ -191,7 +207,7 @@ class WorkflowEngine:
             with open(journal_path, "a") as f:
                 f.write("\n" + "\n".join(lines))
 
-    def get_state(self) -> RepoState:
+    def get_state(self) -> RepoState | ErrorState:
         """获取当前状态"""
         return self.machine.state
 

@@ -224,3 +224,54 @@ class TestTransitionsTable:
         """终态有 push 相关转移"""
         assert Event.PUSH_OK in ALLOWED_EVENTS[RepoState.COMMITTED]
         assert Event.PUSH_FAIL in ALLOWED_EVENTS[RepoState.COMMITTED]
+
+
+class TestStateMachineHooks:
+    """测试状态机钩子"""
+
+    def test_add_enter_hook(self):
+        """测试添加进入状态钩子"""
+        machine = StateMachine()
+        called = []
+        
+        def callback(old, event):
+            called.append((old, event))
+        
+        machine.add_enter_hook(RepoState.CLEAN_AND_CONSISTENT, callback)
+        machine.transition(Event.DOC_CHECK_OK)
+        
+        assert len(called) == 1
+        assert called[0] == (RepoState.DIRTY, Event.DOC_CHECK_OK)
+
+    def test_add_exit_hook(self):
+        """测试添加退出状态钩子"""
+        machine = StateMachine()
+        called = []
+        
+        def callback(old, event):
+            called.append((old, event))
+        
+        machine.add_exit_hook(RepoState.DIRTY, callback)
+        machine.transition(Event.DOC_CHECK_OK)
+        
+        assert len(called) == 1
+        assert called[0] == (RepoState.DIRTY, Event.DOC_CHECK_OK)
+
+    def test_multiple_hooks(self):
+        """测试多个钩子"""
+        machine = StateMachine()
+        calls = []
+        
+        def callback1(old, event):
+            calls.append("callback1")
+        
+        def callback2(old, event):
+            calls.append("callback2")
+        
+        machine.add_enter_hook(RepoState.CLEAN_AND_CONSISTENT, callback1)
+        machine.add_enter_hook(RepoState.CLEAN_AND_CONSISTENT, callback2)
+        machine.transition(Event.DOC_CHECK_OK)
+        
+        assert len(calls) == 2
+        assert "callback1" in calls
+        assert "callback2" in calls

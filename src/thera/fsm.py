@@ -94,33 +94,53 @@ class IllegalTransitionError(StateMachineError):
 @dataclass
 class StateMachine:
     """Git 状态机"""
-    state: RepoState = RepoState.DIRTY
+    state: RepoState | ErrorState = RepoState.DIRTY
     error: Optional[ErrorState] = None
     history: list[tuple[RepoState, Event]] = field(default_factory=list)
+    on_enter_callbacks: dict = field(default_factory=dict)
+    on_exit_callbacks: dict = field(default_factory=dict)
+
+    def add_enter_hook(self, state: RepoState | ErrorState, callback) -> None:
+        """添加进入状态时的钩子"""
+        if state not in self.on_enter_callbacks:
+            self.on_enter_callbacks[state] = []
+        self.on_enter_callbacks[state].append(callback)
+
+    def add_exit_hook(self, state: RepoState, callback) -> None:
+        """添加退出状态时的钩子"""
+        if state not in self.on_exit_callbacks:
+            self.on_exit_callbacks[state] = []
+        self.on_exit_callbacks[state].append(callback)
 
     def can_transition(self, event: Event) -> bool:
         """检查是否可以转移"""
-        return event in ALLOWED_EVENTS.get(self.state, [])
+        return event in ALLOWED_EVENTS.get(self.state, [])  # type: ignore
 
     def transition(self, event: Event) -> RepoState | ErrorState:
         """执行状态转移"""
         if not self.can_transition(event):
-            raise IllegalTransitionError(self.state, event)
+            raise IllegalTransitionError(self.state, event)  # type: ignore
 
         old_state = self.state
-        new_state = TRANSITIONS[self.state][event]
+        new_state = TRANSITIONS[self.state][event]  # type: ignore
 
-        self.history.append((old_state, event))
+        for callback in self.on_exit_callbacks.get(old_state, []):
+            callback(old_state, event)
+
+        self.history.append((old_state, event))  # type: ignore
         self.state = new_state
 
         if event == Event.PUSH_FAIL:
             self.error = ErrorState.NETWORK_ERROR
 
+        for callback in self.on_enter_callbacks.get(new_state, []):
+            callback(old_state, event)
+
         return new_state
 
     def get_allowed_events(self) -> list[Event]:
         """获取当前状态允许的事件"""
-        return ALLOWED_EVENTS.get(self.state, [])
+        return ALLOWED_EVENTS.get(self.state, [])  # type: ignore
 
     def is_error_state(self) -> bool:
         """是否处于错误状态"""
