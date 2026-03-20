@@ -67,6 +67,13 @@ class TestCheckGitmodulesVsYaml:
 
     def test_yaml_not_exists(self, tmp_path, git_repo):
         """测试 YAML 不存在"""
+        # 先创建 .gitmodules，这样能测试到 YAML 不存在的分支
+        gitmodules_content = '''
+[submodule "archive"]
+\tpath = docs/archive
+'''
+        (git_repo / ".gitmodules").write_text(gitmodules_content)
+        
         result = doc_check.check_gitmodules_vs_yaml(git_repo, "not_exist.yaml")
         assert result[0] is False
         assert "不存在" in result[1]
@@ -286,3 +293,28 @@ submodules:
             )
             result = doc_check.main(args)
             assert result == 1
+
+    def test_argparse_default_args(self, tmp_path, git_repo):
+        """测试 argparse 默认参数路径（覆盖 99-102 行）"""
+        gitmodules_content = '''
+[submodule "archive"]
+\tpath = docs/archive
+'''
+        (git_repo / ".gitmodules").write_text(gitmodules_content)
+        
+        yaml_content = """
+submodules:
+  - name: "archive"
+    path: "docs/archive"
+"""
+        yaml_path = git_repo / "meta" / "profile" / "submodules.yaml"
+        yaml_path.parent.mkdir(parents=True)
+        yaml_path.write_text(yaml_content)
+        
+        (git_repo / "docs" / "archive").mkdir(parents=True)
+        
+        with patch("builtins.print"):
+            # Patch sys.argv to use git_repo as the repo path
+            with patch("sys.argv", ["doc_check.py", "--repo", str(git_repo)]):
+                result = doc_check.main()
+                assert result == 0

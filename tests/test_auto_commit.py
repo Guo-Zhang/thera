@@ -13,6 +13,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from thera import auto_commit
 
 
+class TestRunGit:
+    """测试 run_git 函数"""
+
+    def test_run_git_capture(self, git_repo):
+        """测试捕获输出的 git 命令"""
+        result = auto_commit.run_git(["status"], git_repo)
+        assert len(result) == 3
+
+    def test_run_git_no_capture(self, git_repo):
+        """测试不捕获输出的 git 命令（覆盖 capture=False 分支）"""
+        result = auto_commit.run_git(["status"], git_repo, capture=False)
+        # capture=False 时返回 (None, None, returncode)
+        assert result[0] is None
+        assert result[1] is None
+        assert result[2] == 0
+
+
 class TestGetChangeType:
     """测试 get_change_type 函数"""
 
@@ -69,6 +86,14 @@ class TestGetRepoStatus:
             result = auto_commit.get_repo_status(tmp_path)
             assert result == []
 
+    def test_with_empty_lines(self, tmp_path):
+        """测试输出包含空行（边界覆盖）"""
+        with patch("thera.auto_commit.run_git") as mock:
+            output = " M  docs/README.md\n\n?? new_file.txt\n"
+            mock.return_value = (output, "", 0)
+            result = auto_commit.get_repo_status(tmp_path)
+            assert len(result) == 2
+
 
 class TestGetSubmoduleStatus:
     """测试 get_submodule_status 函数"""
@@ -89,6 +114,14 @@ class TestGetSubmoduleStatus:
             assert len(result) == 2
             assert "docs/archive" in result
             assert "docs/tutorial" in result
+
+    def test_with_empty_lines(self, tmp_path):
+        """测试输出包含空行（边界覆盖）"""
+        with patch("thera.auto_commit.run_git") as mock:
+            output = "abc1234 docs/archive\n\ndef5678 docs/tutorial\n"
+            mock.return_value = (output, "", 0)
+            result = auto_commit.get_submodule_status(tmp_path)
+            assert len(result) == 2
 
 
 class TestFormatChanges:
@@ -320,6 +353,26 @@ class TestCommitAndPush:
                 ])
                 assert result[0] is True
 
+    def test_success_submodule_with_sync_prefix(self, tmp_path):
+        """测试子模块提交成功，验证 [sync] 前缀"""
+        with patch("thera.auto_commit.run_git") as mock:
+            def side_effect(args, repo, capture=True):
+                if args == ["add", "-A"]:
+                    return ("", "", 0)
+                elif args[0] == "commit" and args[1] == "-m":
+                    # 验证 message 包含 [sync]
+                    assert "[sync]" in args[2]
+                    return ("abc1234", "", 0)
+                elif args[0] == "push":
+                    return ("", "", 0)
+                return ("", "", 0)
+            mock.side_effect = side_effect
+            with patch("builtins.print"):
+                result = auto_commit.commit_and_push(tmp_path, "docs/archive", [
+                    {"path": "README.md", "type": "docs", "status": "M"}
+                ], is_main=True)
+                assert result[0] is True
+
     def test_main_repo_label(self, tmp_path):
         """测试主仓库标签"""
         with patch("thera.auto_commit.run_git") as mock:
@@ -398,6 +451,16 @@ class TestMain:
                 args = argparse.Namespace(repo=str(git_repo), dry_run=False)
                 result = auto_commit.main(args)
                 assert result == 0
+
+    def test_argparse_default_args(self, tmp_path, git_repo):
+        """测试 argparse 默认参数路径（覆盖 243-246 行）"""
+        with patch("thera.auto_commit.detect_all_changes") as mock_detect:
+            with patch("builtins.print"):
+                mock_detect.return_value = {}
+                # Patch sys.argv to simulate running without arguments
+                with patch("sys.argv", ["auto_commit.py"]):
+                    result = auto_commit.main()
+                    assert result == 0
 
     def test_dry_run(self, tmp_path, git_repo):
         """测试 dry-run 模式"""

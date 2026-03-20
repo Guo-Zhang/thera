@@ -76,6 +76,15 @@ class TestGetSubmoduleStatus:
             assert result[1]["path"] == "docs/tutorial"
             assert result[2]["has_update"] is True
 
+    def test_with_empty_lines_in_output(self, tmp_path):
+        """测试输出中包含空行（覆盖 continue 语句）"""
+        with patch("thera.submodule_sync.run_git") as mock:
+            output = "abc1234 docs/archive\n\ndef5678 docs/tutorial\n"
+            mock.return_value = output
+            result = submodule_sync.get_submodule_status(tmp_path)
+            # 空行应该被跳过，不影响结果
+            assert len(result) == 2
+
 
 class TestSyncSubmodule:
     """测试 sync_submodule 函数"""
@@ -170,3 +179,11 @@ class TestMain:
             )
             result = submodule_sync.main(args)
             assert result == 1
+
+    def test_argparse_default_args(self, tmp_path, git_repo):
+        """测试 argparse 默认参数路径（覆盖 59-64 行）"""
+        with patch("builtins.print"):
+            # Patch sys.argv to simulate running without arguments
+            with patch("sys.argv", ["submodule_sync.py"]):
+                result = submodule_sync.main()
+                assert result == 1  # 显示帮助后退出
