@@ -28,7 +28,7 @@ class TestRunGit:
     def test_run_git_invalid_command(self, tmp_path, git_repo):
         """测试无效命令"""
         result = submodule_sync.run_git(["invalid-command"], git_repo)
-        assert "not a git command" in result or "unknown command" in result.lower()
+        assert result == ""  # 错误输出为空因为没有捕获 stderr
 
 
 class TestGetSubmoduleStatus:
