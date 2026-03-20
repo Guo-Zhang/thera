@@ -21,6 +21,11 @@
 | test_fsm.py | ✅ 完成 | 28 测试，100% 覆盖率 |
 | test_git_ops.py | ✅ 完成 | 45 测试，94% 覆盖率 |
 | test_workflow.py | ✅ 完成 | 21 测试，94% 覆盖率 |
+| test_behavior_parity.py | ✅ 完成 | 23 测试，验证新旧代码一致 |
+| 阶段一：Diff 测试 | ✅ 完成 | 行为基准验证通过 |
+| 阶段二：影子模式 | ✅ 完成 | CLI 支持 `--new-engine` 开关 |
+| 阶段三A：I/O 替换 | ✅ 完成 | auto_commit.py 使用 GitOps |
+| 阶段三B：流程替换 | ✅ 完成 | CLI 使用 WorkflowEngine |
 
 ---
 
@@ -243,6 +248,8 @@ def run_git(*args, **kwargs):
 
 ## 阶段五：清理与增强
 
+> **注意**: 阶段三已完成，CLI 已完全使用 WorkflowEngine。阶段四已合并到阶段三B中。
+
 ### 5.1 删除废弃代码
 
 ```bash
@@ -314,10 +321,10 @@ def run_standard_workflow(self, yaml_path: Path) -> WorkflowResult:
 
 | 阶段 | 验证项 | 状态 |
 |------|--------|------|
-| 一 | Diff 测试全部通过 | ⬜ |
-| 二 | 影子模式验证成功 | ⬜ |
-| 三 | 分层替换无回归 | ⬜ |
-| 四 | CLI 入口切换完成 | ⬜ |
+| 一 | Diff 测试全部通过 | ✅ 完成 |
+| 二 | 影子模式验证成功 | ✅ 完成 |
+| 三 | 分层替换无回归 | ✅ 完成 |
+| 四 | CLI 入口切换完成 | ✅ 完成 |
 | 五 | 清理增强完成 | ⬜ |
 
 ---
