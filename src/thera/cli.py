@@ -2,22 +2,22 @@
 Thera CLI - 统一入口
 
 Usage:
-    thera auto-commit [--dry-run] [--new-engine]
-    thera doc-check [--repo PATH] [--new-engine]
-    thera submodule-sync [--check] [--sync PATHS] [--sync-all] [--new-engine]
+    thera auto-commit [--dry-run]
+    thera doc-check [--repo PATH]
+    thera submodule-sync [--check] [--sync PATHS] [--sync-all]
     thera --help
 
-Options:
-    --new-engine    使用新的领域层引擎（影子模式）
+架构说明：
+- CLI 层：入口解析和输出格式化
+- Workflow 层：状态管理和流程控制（默认）
+- GitOps 层：Git 操作封装
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-from thera import auto_commit
-from thera import doc_check
-from thera import submodule_sync
+from thera.workflow import WorkflowEngine
 
 
 def main():
@@ -41,11 +41,6 @@ def main():
         default=".",
         help="仓库根目录"
     )
-    auto_commit_parser.add_argument(
-        "--new-engine",
-        action="store_true",
-        help="使用新的领域层引擎（影子模式）"
-    )
     
     doc_check_parser = subparsers.add_parser(
         "doc-check",
@@ -60,11 +55,6 @@ def main():
         "--repo",
         default=".",
         help="仓库根目录"
-    )
-    doc_check_parser.add_argument(
-        "--new-engine",
-        action="store_true",
-        help="使用新的领域层引擎（影子模式）"
     )
     
     submodule_parser = subparsers.add_parser(
@@ -91,11 +81,6 @@ def main():
         default=".",
         help="仓库根目录"
     )
-    submodule_parser.add_argument(
-        "--new-engine",
-        action="store_true",
-        help="使用新的领域层引擎（影子模式）"
-    )
     
     args = parser.parse_args()
     
@@ -111,98 +96,108 @@ def main():
 
 
 def run_auto_commit(args):
-    """运行 auto-commit（支持影子模式）"""
-    if getattr(args, "new_engine", False):
-        from thera.workflow import WorkflowEngine
-        repo_root = Path(args.repo)
-        engine = WorkflowEngine(repo_root)
-        
-        print("[影子模式] 使用新引擎运行")
-        
-        if args.dry_run:
-            status = engine.git_ops.get_status()
-            if status.is_clean:
-                print("无变更")
-                return 0
-            print(f"变更: {len(status.changes)} 个文件")
-            for change in status.changes:
-                print(f"  {change.change_type.name}: {change.path}")
-            return 0
-        
-        result = engine.commit_and_push("[sync] auto commit from workflow")
-        if result.success:
-            print(f"✓ 推送成功: {result.commit_sha}")
-            return 0
-        else:
-            print(f"✗ 失败: {result.message}")
-            if result.error:
-                print(f"  错误: {result.error}")
-            return 1
+    """运行 auto-commit"""
+    repo_root = Path(args.repo)
+    engine = WorkflowEngine(repo_root)
     
-    return auto_commit.main(args)
+    status = engine.git_ops.get_status()
+    
+    if status.is_clean:
+        print("[OK] No changes detected")
+        return 0
+    
+    print("Detected changes:")
+    print("-" * 50)
+    
+    changes = status.changes
+    if changes:
+        print(f"主仓库: {len(changes)} 个文件")
+        for change in changes[:5]:
+            print(f"  {change.change_type.name}: {change.path}")
+        if len(changes) > 5:
+            print(f"  ... (+{len(changes) - 5} more)")
+    
+    print("-" * 50)
+    
+    if args.dry_run:
+        print("\nDry run - no changes made.")
+        return 0
+    
+    print("\nCommit and push these changes? [y/N/q]: ", end="")
+    response = input().strip().lower()
+    
+    if response == "q":
+        print("Aborted.")
+        return 0
+    elif response != "y":
+        print("No changes committed.")
+        return 0
+    
+    result = engine.commit_and_push("[sync] auto commit from workflow")
+    
+    if result.success:
+        print(f"\n[OK] Pushed: {result.commit_sha}")
+        return 0
+    else:
+        print(f"\n[FAIL] {result.message}")
+        if result.error:
+            print(f"  Error: {result.error}")
+        return 1
 
 
 def run_doc_check(args):
-    """运行 doc-check（支持影子模式）"""
-    if getattr(args, "new_engine", False):
-        from thera.workflow import WorkflowEngine
-        repo_root = Path(args.repo)
-        engine = WorkflowEngine(repo_root)
-        
-        config_path = getattr(args, "config", "meta/profile/submodules.yaml")
-        print("[影子模式] 使用新引擎运行")
-        
-        result = engine.doc_check(Path(config_path))
-        if result.is_consistent:
-            print(f"✓ 一致性检查通过: {result.message}")
-            return 0
-        else:
-            print(f"✗ 一致性检查失败: {result.message}")
-            if result.missing_paths:
-                print(f"  缺失路径: {', '.join(result.missing_paths)}")
-            return 1
+    """运行 doc-check"""
+    repo_root = Path(args.repo)
+    engine = WorkflowEngine(repo_root)
     
-    return doc_check.main(args)
+    config_path = getattr(args, "config", "meta/profile/submodules.yaml")
+    
+    result = engine.doc_check(Path(config_path))
+    
+    if result.is_consistent:
+        print(f"[OK] 一致性检查通过")
+        return 0
+    else:
+        print(f"[WARN] 一致性检查失败: {result.message}")
+        if result.missing_paths:
+            print(f"  缺失路径: {', '.join(result.missing_paths)}")
+        return 1
 
 
 def run_submodule_sync(args):
-    """运行 submodule-sync（支持影子模式）"""
-    if getattr(args, "new_engine", False):
-        from thera.workflow import WorkflowEngine
-        repo_root = Path(args.repo)
-        engine = WorkflowEngine(repo_root)
-        
-        print("[影子模式] 使用新引擎运行")
-        
-        if args.check:
-            submodules = engine.git_ops.get_submodule_status()
-            if not submodules:
-                print("无子模块")
-                return 0
-            print(f"子模块数: {len(submodules)}")
-            for sub in submodules:
-                status = "有更新" if sub.is_behind else "已是最新"
-                print(f"  {sub.path}: {sub.local_commit} ({status})")
-            return 0
-        
-        if args.sync_all:
-            paths = None
-        elif args.sync:
-            paths = args.sync.split(",")
-        else:
-            paths = None
-        
-        result = engine.sync_submodules(paths)
-        if result.success:
-            print(f"✓ 同步完成: {result.message}")
-            return 0
-        else:
-            print(f"✗ 同步失败: {result.message}")
-            if result.error:
-                print(f"  错误: {result.error}")
-            return 1
+    """运行 submodule-sync"""
+    repo_root = Path(args.repo)
+    engine = WorkflowEngine(repo_root)
     
-    return submodule_sync.main(args)
+    if args.check:
+        submodules = engine.git_ops.get_submodule_status()
+        if not submodules:
+            print("[OK] No submodules")
+            return 0
+        
+        print(f"子模块数: {len(submodules)}")
+        for sub in submodules:
+            status = "有更新" if sub.is_behind else "已是最新"
+            print(f"  {sub.path}: {sub.local_commit} ({status})")
+        return 0
+    
+    if args.sync_all:
+        paths = None
+    elif args.sync:
+        paths = args.sync.split(",")
+    else:
+        paths = None
+    
+    result = engine.sync_submodules(paths)
+    
+    if result.success:
+        print(f"[OK] 同步完成")
+        return 0
+    else:
+        print(f"[FAIL] 同步失败: {result.message}")
+        if result.error:
+            print(f"  Error: {result.error}")
+        return 1
 
 
 if __name__ == "__main__":
