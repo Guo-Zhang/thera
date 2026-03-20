@@ -1,10 +1,12 @@
 """vital 数据读取模块"""
 
+import json
 import yaml
 from pathlib import Path
 
-# 默认数据路径（主仓库 meta/ 目录）
-DEFAULT_DATA_PATH = Path(__file__).parent.parent.parent.parent.parent / "meta"
+# 默认数据路径
+VITAL_DATA_PATH = Path(__file__).parent / "data"
+META_DATA_PATH = Path(__file__).parent.parent.parent.parent.parent / "meta"
 
 
 def load_submodules(data_path: Path = None) -> list[dict]:
@@ -17,7 +19,7 @@ def load_submodules(data_path: Path = None) -> list[dict]:
         子模块列表，每个元素包含 name, path, category, description 等字段
     """
     if data_path is None:
-        data_path = DEFAULT_DATA_PATH
+        data_path = META_DATA_PATH
 
     yaml_path = data_path / "profile" / "submodules.yaml"
     if not yaml_path.exists():
@@ -81,3 +83,117 @@ def get_type_label(type_: str) -> str:
         "case-law": "判例法",
     }
     return labels.get(type_, type_)
+
+
+# ==================== 转换过程数据 ====================
+
+
+def load_raw_journal(date: str, data_path: Path = None) -> str:
+    """加载原始日志
+
+    Args:
+        date: 日期字符串，格式 YYYY-MM-DD
+        data_path: 数据目录路径
+
+    Returns:
+        原始日志内容
+    """
+    if data_path is None:
+        data_path = VITAL_DATA_PATH / "sample"
+
+    raw_path = data_path / "raw" / f"{date}.md"
+    if not raw_path.exists():
+        return ""
+
+    return raw_path.read_text()
+
+
+def load_diary(date: str, data_path: Path = None) -> str:
+    """加载清洗后日记
+
+    Args:
+        date: 日期字符串，格式 YYYY-MM-DD
+        data_path: 数据目录路径
+
+    Returns:
+        清洗后日记内容
+    """
+    if data_path is None:
+        data_path = VITAL_DATA_PATH / "sample"
+
+    diary_path = data_path / "diary" / f"{date}.md"
+    if not diary_path.exists():
+        return ""
+
+    return diary_path.read_text()
+
+
+def load_episode(date: str, data_path: Path = None) -> list[dict]:
+    """加载提炼后事件记忆
+
+    Args:
+        date: 日期字符串，格式 YYYY-MM-DD
+        data_path: 数据目录路径
+
+    Returns:
+        事件记忆列表，每个元素包含 id, title, description, tense, type
+    """
+    if data_path is None:
+        data_path = VITAL_DATA_PATH / "sample"
+
+    episode_path = data_path / "episode" / f"{date}.jsonl"
+    if not episode_path.exists():
+        return []
+
+    episodes = []
+    with open(episode_path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                episodes.append(json.loads(line))
+
+    return episodes
+
+
+def get_tense_label(tense: str) -> str:
+    """获取时态的中文标签"""
+    labels = {
+        "past": "过去",
+        "present": "现在",
+        "future": "未来",
+    }
+    return labels.get(tense, tense)
+
+
+def get_event_type_label(event_type: str) -> str:
+    """获取事件类型的中文标签"""
+    labels = {
+        "decision": "决策",
+        "plan": "计划",
+        "report": "报告",
+        "evaluation": "评估",
+        "retrospective": "复盘",
+    }
+    return labels.get(event_type, event_type)
+
+
+def get_available_dates(data_path: Path = None) -> list[str]:
+    """获取可用的日期列表
+
+    Returns:
+        日期字符串列表，按日期倒序排列
+    """
+    if data_path is None:
+        data_path = VITAL_DATA_PATH / "sample"
+
+    raw_dir = data_path / "raw"
+    if not raw_dir.exists():
+        return []
+
+    dates = []
+    for f in raw_dir.glob("*.md"):
+        date = f.stem
+        if date.count("-") == 2:  # YYYY-MM-DD 格式
+            dates.append(date)
+
+    return sorted(dates, reverse=True)

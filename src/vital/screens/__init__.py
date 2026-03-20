@@ -5,6 +5,7 @@ from kivy.uix.button import Button
 from kivy.metrics import dp
 
 from vital.screens.submodules import SubmodulesScreen
+from vital.screens.transform import TransformScreen
 
 FONT_NAME = "Chinese"
 
@@ -37,6 +38,15 @@ class HomeScreen(Screen):
         )
         layout.add_widget(btn_submodules)
 
+        btn_transform = Button(
+            text="模糊进清晰出",
+            font_name=FONT_NAME,
+            size_hint_y=None,
+            height=dp(50),
+            on_press=self.goto_transform,
+        )
+        layout.add_widget(btn_transform)
+
         # 占位
         layout.add_widget(Label())
 
@@ -46,5 +56,9 @@ class HomeScreen(Screen):
         """跳转到子模块页面"""
         self.manager.current = "submodules"
 
+    def goto_transform(self, instance):
+        """跳转到转换过程页面"""
+        self.manager.current = "transform"
 
-__all__ = ["HomeScreen", "SubmodulesScreen"]
+
+__all__ = ["HomeScreen", "SubmodulesScreen", "TransformScreen"]
