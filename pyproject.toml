@@ -28,7 +28,6 @@ vital = "vital.main:main"
 [project.optional-dependencies]
 gui = [
     "kivy>=2.3.0",
-    "kivymd>=1.2.0",
 ]
 test = [
     "pytest>=7.0.0",
