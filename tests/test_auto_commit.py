@@ -283,7 +283,7 @@ class TestCommitAndPush:
 
     def test_add_failure(self, tmp_path):
         """测试 git add 失败"""
-        with patch("thera.auto_commit.run_git") as mock:
+        with patch("thera.git_ops.GitOps.run_git") as mock:
             mock.return_value = ("", "error", 1)
             with patch("builtins.print"):
                 result = auto_commit.commit_and_push(tmp_path, ".", [])
@@ -291,12 +291,14 @@ class TestCommitAndPush:
 
     def test_nothing_to_commit(self, tmp_path):
         """测试无内容提交"""
-        with patch("thera.auto_commit.run_git") as mock:
-            def side_effect(args, repo, capture=True):
+        with patch("thera.git_ops.GitOps.run_git") as mock:
+            def side_effect(args, capture=True):
                 if args == ["add", "-A"]:
                     return ("", "", 0)
                 elif args[0] == "commit":
-                    return ("", "nothing to commit", 1)
+                    return ("", "nothing to commit, working tree clean", 1)
+                elif args[0] == "rev-parse":
+                    return ("", "", 0)
                 return ("", "", 0)
             mock.side_effect = side_effect
             with patch("builtins.print"):
@@ -305,11 +307,13 @@ class TestCommitAndPush:
 
     def test_commit_failure(self, tmp_path):
         """测试提交失败"""
-        with patch("thera.auto_commit.run_git") as mock:
-            def side_effect(args, repo, capture=True):
+        with patch("thera.git_ops.GitOps.run_git") as mock:
+            def side_effect(args, capture=True):
                 if args == ["add", "-A"]:
                     return ("", "", 0)
-                return ("", "commit error", 1)
+                elif args[0] == "commit":
+                    return ("", "commit error", 1)
+                return ("", "", 0)
             mock.side_effect = side_effect
             with patch("builtins.print"):
                 result = auto_commit.commit_and_push(tmp_path, ".", [
@@ -319,13 +323,15 @@ class TestCommitAndPush:
 
     def test_push_failure(self, tmp_path):
         """测试推送失败"""
-        with patch("thera.auto_commit.run_git") as mock:
-            def side_effect(args, repo, capture=True):
+        with patch("thera.git_ops.GitOps.run_git") as mock:
+            def side_effect(args, capture=True):
                 if args == ["add", "-A"]:
                     return ("", "", 0)
-                elif args == ["commit", "-m", mock.ANY]:
-                    return ("abc1234", "", 0)
-                elif args == ["push"]:
+                elif args[0] == "commit":
+                    return ("", "", 0)
+                elif args[0] == "rev-parse":
+                    return ("abc1234567890", "", 0)
+                elif args[0] == "push":
                     return ("", "push error", 1)
                 return ("", "", 0)
             mock.side_effect = side_effect
@@ -337,12 +343,14 @@ class TestCommitAndPush:
 
     def test_success(self, tmp_path):
         """测试成功"""
-        with patch("thera.auto_commit.run_git") as mock:
-            def side_effect(args, repo, capture=True):
+        with patch("thera.git_ops.GitOps.run_git") as mock:
+            def side_effect(args, capture=True):
                 if args == ["add", "-A"]:
                     return ("", "", 0)
                 elif args[0] == "commit":
-                    return ("abc1234", "", 0)
+                    return ("", "", 0)
+                elif args[0] == "rev-parse":
+                    return ("abc1234567890", "", 0)
                 elif args[0] == "push":
                     return ("", "", 0)
                 return ("", "", 0)
@@ -355,14 +363,15 @@ class TestCommitAndPush:
 
     def test_success_submodule_with_sync_prefix(self, tmp_path):
         """测试子模块提交成功，验证 [sync] 前缀"""
-        with patch("thera.auto_commit.run_git") as mock:
-            def side_effect(args, repo, capture=True):
+        with patch("thera.git_ops.GitOps.run_git") as mock:
+            def side_effect(args, capture=True):
                 if args == ["add", "-A"]:
                     return ("", "", 0)
                 elif args[0] == "commit" and args[1] == "-m":
-                    # 验证 message 包含 [sync]
                     assert "[sync]" in args[2]
-                    return ("abc1234", "", 0)
+                    return ("", "", 0)
+                elif args[0] == "rev-parse":
+                    return ("abc1234567890", "", 0)
                 elif args[0] == "push":
                     return ("", "", 0)
                 return ("", "", 0)
@@ -375,9 +384,11 @@ class TestCommitAndPush:
 
     def test_main_repo_label(self, tmp_path):
         """测试主仓库标签"""
-        with patch("thera.auto_commit.run_git") as mock:
-            def side_effect(args, repo, capture=True):
-                return ("", "", 1)
+        with patch("thera.git_ops.GitOps.run_git") as mock:
+            def side_effect(args, capture=True):
+                if args == ["add", "-A"]:
+                    return ("", "error", 1)
+                return ("", "", 0)
             mock.side_effect = side_effect
             with patch("builtins.print"):
                 success, label, changes = auto_commit.commit_and_push(tmp_path, ".", [])
@@ -385,9 +396,11 @@ class TestCommitAndPush:
 
     def test_submodule_label(self, tmp_path):
         """测试子模块标签"""
-        with patch("thera.auto_commit.run_git") as mock:
-            def side_effect(args, repo, capture=True):
-                return ("", "", 1)
+        with patch("thera.git_ops.GitOps.run_git") as mock:
+            def side_effect(args, capture=True):
+                if args == ["add", "-A"]:
+                    return ("", "error", 1)
+                return ("", "", 0)
             mock.side_effect = side_effect
             with patch("builtins.print"):
                 success, label, changes = auto_commit.commit_and_push(tmp_path, "docs/archive", [])

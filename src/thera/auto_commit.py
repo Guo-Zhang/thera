@@ -3,6 +3,9 @@
 自动提交推送脚本
 
 检测变更，交互确认后按序提交推送，并追加日志。
+
+此模块已重构为使用 GitOps 层，但仍保持原有接口和流程逻辑。
+阶段 3A：I/O 层替换完成。
 """
 
 import argparse
@@ -11,9 +14,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from thera.git_ops import GitOps
+
 
 def run_git(args, repo_root, capture=True):
-    """运行 git 命令"""
+    """运行 git 命令（已废弃，内部使用 GitOps）"""
     cmd = ["git", "-C", str(repo_root)] + args
     result = subprocess.run(cmd, capture_output=capture, text=True)
     if capture:
@@ -166,7 +171,7 @@ def generate_commit_message(changes):
 
 
 def commit_and_push(repo_root, path, changes, is_main=False):
-    """提交并推送"""
+    """提交并推送（使用 GitOps 层）"""
     if path == ".":
         repo_label = "主仓库"
         log_label = "main"
@@ -176,32 +181,25 @@ def commit_and_push(repo_root, path, changes, is_main=False):
     
     print(f"\n>>> 处理 {repo_label}...")
     
-    stdout, stderr, code = run_git(["add", "-A"], repo_root)
-    if code != 0:
-        print(f"[FAIL] git add failed: {stderr}")
-        return False, log_label, []
+    ops = GitOps(repo_root)
     
     message = generate_commit_message(changes)
     if is_main:
         message = f"[sync] {message}"
     
-    stdout, stderr, code = run_git(["commit", "-m", message], repo_root)
-    if code != 0:
-        if stderr and "nothing to commit" in stderr:
+    result = ops.commit_and_push(message)
+    
+    if result.success:
+        if "无变更" in result.message:
             print(f"[SKIP] {repo_label} - nothing to commit")
             return True, log_label, []
-        print(f"[FAIL] git commit failed: {stderr}")
+        print(f"[OK] {repo_label} pushed")
+        return True, log_label, changes
+    else:
+        print(f"[FAIL] {result.message}")
+        if result.error:
+            print(f"  错误: {result.error}")
         return False, log_label, []
-    
-    print(f"  commit: {message[:60]}...")
-    
-    stdout, stderr, code = run_git(["push"], repo_root)
-    if code != 0:
-        print(f"[FAIL] git push failed: {stderr}")
-        return False, log_label, []
-    
-    print(f"[OK] {repo_label} pushed")
-    return True, log_label, changes
 
 
 def append_journal(repo_root, results):
