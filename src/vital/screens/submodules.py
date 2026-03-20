@@ -13,6 +13,8 @@ from vital.data import (
     get_category_label,
 )
 
+FONT_NAME = "Chinese"
+
 
 class SubmodulesScreen(Screen):
     """子模块总览页面"""
@@ -31,6 +33,7 @@ class SubmodulesScreen(Screen):
         title = Label(
             text="子模块总览",
             font_size=dp(24),
+            font_name=FONT_NAME,
             size_hint_y=None,
             height=dp(40),
         )
@@ -44,12 +47,20 @@ class SubmodulesScreen(Screen):
             spacing=dp(10),
         )
 
-        btn_all = Button(text="全部", on_press=lambda x: self.apply_filter(None))
+        btn_all = Button(
+            text="全部",
+            font_name=FONT_NAME,
+            on_press=lambda x: self.apply_filter(None),
+        )
         btn_procedural = Button(
-            text="程序型", on_press=lambda x: self.apply_filter("procedural")
+            text="程序型",
+            font_name=FONT_NAME,
+            on_press=lambda x: self.apply_filter("procedural"),
         )
         btn_declarative = Button(
-            text="陈述型", on_press=lambda x: self.apply_filter("declarative")
+            text="陈述型",
+            font_name=FONT_NAME,
+            on_press=lambda x: self.apply_filter("declarative"),
         )
 
         filter_bar.add_widget(btn_all)
@@ -71,6 +82,7 @@ class SubmodulesScreen(Screen):
         # 底部统计
         self.count_label = Label(
             text=self._get_count_text(),
+            font_name=FONT_NAME,
             size_hint_y=None,
             height=dp(30),
         )
@@ -114,6 +126,7 @@ class SubmodulesScreen(Screen):
         name_label = Label(
             text=sub.get("name", ""),
             font_size=dp(16),
+            font_name=FONT_NAME,
             bold=True,
             halign="left",
             size_hint_x=0.6,
@@ -129,6 +142,7 @@ class SubmodulesScreen(Screen):
         category_label = Label(
             text=category_text,
             font_size=dp(12),
+            font_name=FONT_NAME,
             halign="right",
             size_hint_x=0.4,
         )
@@ -144,6 +158,7 @@ class SubmodulesScreen(Screen):
         info_label = Label(
             text=f"{path} | {desc}",
             font_size=dp(12),
+            font_name=FONT_NAME,
             halign="left",
             color=(0.6, 0.6, 0.6, 1),
         )

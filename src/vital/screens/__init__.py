@@ -6,6 +6,8 @@ from kivy.metrics import dp
 
 from vital.screens.submodules import SubmodulesScreen
 
+FONT_NAME = "Chinese"
+
 
 class HomeScreen(Screen):
     """主页 - 导航入口"""
@@ -16,12 +18,19 @@ class HomeScreen(Screen):
 
         # 标题
         layout.add_widget(
-            Label(text="vital", font_size=dp(48), size_hint_y=None, height=dp(80))
+            Label(
+                text="vital",
+                font_size=dp(48),
+                font_name=FONT_NAME,
+                size_hint_y=None,
+                height=dp(80),
+            )
         )
 
         # 导航按钮
         btn_submodules = Button(
             text="子模块总览",
+            font_name=FONT_NAME,
             size_hint_y=None,
             height=dp(50),
             on_press=self.goto_submodules,
