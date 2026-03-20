@@ -2,9 +2,13 @@
 
 ## 架构
 
-- [架构设计](./architecture.md) - 整体架构、模块职责、目标状态
+- [架构设计](./architecture.md) - 整体架构、模块职责、范畴论×类型论分层
 
-## 详细设计
+## 范畴论层（创造性）
+
+- [GitOps 工作流设计](./gitops-workflow.md) - 工作流组合、收敛策略、Error Monad
+
+## 类型论层（约束性）
 
 - [状态机设计](./fsm-design.md) - 状态定义、转移规则、错误处理
 - [Git 操作层设计](./git-ops-design.md) - git_ops.py 模块设计
