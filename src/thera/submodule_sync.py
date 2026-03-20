@@ -11,23 +11,23 @@ import sys
 from pathlib import Path
 
 
-def run_git(args, repo_root, capture=True):
+def run_git(args: list[str], repo_root, capture: bool = True) -> str | bool:
     """运行 git 命令"""
     cmd = ["git", "-C", str(repo_root)] + args
     result = subprocess.run(cmd, capture_output=capture, text=True)
     if capture:
-        return result.stdout
+        return result.stdout if result.stdout else ""
     else:
         return result.returncode == 0
 
 
 def get_submodule_status(repo_root):
     """获取子模块状态"""
-    output = run_git(["submodule", "status"], repo_root)
+    output = run_git(["submodule", "status"], repo_root, True)  # type: ignore
     if not output:
         return []
     submodules = []
-    for line in output.strip().split("\n"):
+    for line in output.strip().split("\n"):  # type: ignore
         if not line:
             continue
         parts = line.split()

@@ -187,7 +187,7 @@ def commit_and_push(repo_root, path, changes, is_main=False):
     
     stdout, stderr, code = run_git(["commit", "-m", message], repo_root)
     if code != 0:
-        if "nothing to commit" in stderr:
+        if stderr and "nothing to commit" in stderr:
             print(f"[SKIP] {repo_label} - nothing to commit")
             return True, log_label, []
         print(f"[FAIL] git commit failed: {stderr}")
