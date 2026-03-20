@@ -2,7 +2,6 @@
 
 from vital.data import (
     load_raw_journal,
-    load_diary,
     load_episode,
     get_available_dates,
     get_tense_label,
@@ -15,13 +14,6 @@ def test_load_raw_journal():
     raw = load_raw_journal("2026-03-20")
     assert "九宫格" in raw
     assert "Kivy" in raw
-
-
-def test_load_diary():
-    """测试加载清洗后日记"""
-    diary = load_diary("2026-03-20")
-    assert "记忆分类框架" in diary
-    assert "模糊进清晰出" in diary
 
 
 def test_load_episode():
@@ -65,9 +57,6 @@ def test_load_nonexistent_date():
     """测试加载不存在的日期"""
     raw = load_raw_journal("2000-01-01")
     assert raw == ""
-
-    diary = load_diary("2000-01-01")
-    assert diary == ""
 
     episodes = load_episode("2000-01-01")
     assert episodes == []

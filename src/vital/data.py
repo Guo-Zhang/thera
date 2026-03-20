@@ -108,26 +108,6 @@ def load_raw_journal(date: str, data_path: Path = None) -> str:
     return raw_path.read_text()
 
 
-def load_diary(date: str, data_path: Path = None) -> str:
-    """加载清洗后日记
-
-    Args:
-        date: 日期字符串，格式 YYYY-MM-DD
-        data_path: 数据目录路径
-
-    Returns:
-        清洗后日记内容
-    """
-    if data_path is None:
-        data_path = VITAL_DATA_PATH / "sample"
-
-    diary_path = data_path / "diary" / f"{date}.md"
-    if not diary_path.exists():
-        return ""
-
-    return diary_path.read_text()
-
-
 def load_episode(date: str, data_path: Path = None) -> list[dict]:
     """加载提炼后事件记忆
 

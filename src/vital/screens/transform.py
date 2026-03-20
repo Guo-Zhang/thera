@@ -9,7 +9,6 @@ from kivy.metrics import dp
 
 from vital.data import (
     load_raw_journal,
-    load_diary,
     load_episode,
     get_available_dates,
     get_tense_label,
@@ -74,18 +73,13 @@ class TransformScreen(Screen):
         date_bar.add_widget(btn_next)
         root.add_widget(date_bar)
 
-        # 三栏内容
-        content = BoxLayout(orientation="horizontal", spacing=dp(5))
+        # 两栏内容
+        content = BoxLayout(orientation="horizontal", spacing=dp(10))
 
         # 原始输入
         raw_box = self._create_column("原始输入", "[模糊]")
         self.raw_content = raw_box.children[0]  # ScrollView
         content.add_widget(raw_box)
-
-        # 清洗后
-        diary_box = self._create_column("清洗后", "[半结构化]")
-        self.diary_content = diary_box.children[0]
-        content.add_widget(diary_box)
 
         # 提炼后
         episode_box = self._create_column("提炼后", "[结构化]")
@@ -168,7 +162,6 @@ class TransformScreen(Screen):
 
         # 清空内容
         self._get_content_layout(self.raw_content).clear_widgets()
-        self._get_content_layout(self.diary_content).clear_widgets()
         self._get_content_layout(self.episode_content).clear_widgets()
 
         # 加载原始日志
@@ -181,25 +174,10 @@ class TransformScreen(Screen):
                 halign="left",
                 valign="top",
                 size_hint_y=None,
-                text_size=(dp(200), None),
+                text_size=(dp(300), None),
             )
             raw_label.bind(texture_size=raw_label.setter("size"))
             self._get_content_layout(self.raw_content).add_widget(raw_label)
-
-        # 加载清洗后日记
-        diary_text = load_diary(self.current_date)
-        if diary_text:
-            diary_label = Label(
-                text=diary_text,
-                font_size=dp(12),
-                font_name=FONT_NAME,
-                halign="left",
-                valign="top",
-                size_hint_y=None,
-                text_size=(dp(200), None),
-            )
-            diary_label.bind(texture_size=diary_label.setter("size"))
-            self._get_content_layout(self.diary_content).add_widget(diary_label)
 
         # 加载提炼后事件记忆
         episodes = load_episode(self.current_date)
