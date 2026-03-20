@@ -5,6 +5,7 @@
 - 本地数据存储与状态管理
 - Apple Notes 导入与 memo 活动分析流水线
 - 文档与运维审计脚本
+- **vital**：Kivy GUI 前端（与 thera 共享本地数据）
 
 ## 环境要求
 
@@ -15,16 +16,17 @@
 ## 快速开始
 
 ```bash
-# 1) 安装依赖
-uv sync --dev
+# 1) 安装依赖（含 GUI 支持）
+uv sync --dev --extra gui
 
 # 2) 配置环境变量
 cp .env.example .env
 
 # 3) 启动 TUI
 uv run thera
-# 或
-python -m thera
+
+# 4) 启动 GUI（可选）
+uv run vital
 ```
 
 ## 环境变量
@@ -83,6 +85,13 @@ src/thera/
     memo.py              # 备忘录分析
   state/
     storage_state.py     # 本地存储状态管理
+
+src/vital/               # Kivy GUI 前端（独立应用）
+  __init__.py
+  main.py                # 入口：vital.main:main
+  app.py                 # VitalApp(MDApp)
+  screens/
+    __init__.py          # HomeScreen
 
 docs/
   RAEDME.md              # 文档索引（文件名保持现状）
