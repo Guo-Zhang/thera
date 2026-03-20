@@ -238,11 +238,12 @@ def append_journal(repo_root, results):
         print(f"\n[JOURNAL] Updated {journal_path}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="自动提交推送工具")
-    parser.add_argument("--repo", default=".", help="仓库根目录")
-    parser.add_argument("--dry-run", action="store_true", help="仅显示变更，不提交")
-    args = parser.parse_args()
+def main(args=None):
+    if args is None:
+        parser = argparse.ArgumentParser(description="自动提交推送工具")
+        parser.add_argument("--repo", default=".", help="仓库根目录")
+        parser.add_argument("--dry-run", action="store_true", help="仅显示变更，不提交")
+        args = parser.parse_args()
     
     repo_root = Path(args.repo).resolve()
     

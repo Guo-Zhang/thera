@@ -94,11 +94,12 @@ def check_yaml_paths(repo_root, config_path):
     return all_exist, details
 
 
-def main():
-    parser = argparse.ArgumentParser(description="文档一致性检查")
-    parser.add_argument("--config", default="meta/profile/submodules.yaml", help="YAML 配置文件路径")
-    parser.add_argument("--repo", default=".", help="仓库根目录")
-    args = parser.parse_args()
+def main(args=None):
+    if args is None:
+        parser = argparse.ArgumentParser(description="文档一致性检查")
+        parser.add_argument("--config", default="meta/profile/submodules.yaml", help="YAML 配置文件路径")
+        parser.add_argument("--repo", default=".", help="仓库根目录")
+        args = parser.parse_args()
     
     repo_root = Path(args.repo).resolve()
     config_path = args.config

@@ -54,14 +54,14 @@ def sync_submodule(path, repo_root, verbose=False):
     return success
 
 
-def main():
-    parser = argparse.ArgumentParser(description="子模块同步工具")
-    parser.add_argument("--check", action="store_true", help="检测远程更新")
-    parser.add_argument("--sync", metavar="PATHS", help="同步指定子模块（逗号分隔）")
-    parser.add_argument("--sync-all", action="store_true", help="同步所有子模块")
-    parser.add_argument("--repo", default=".", help="仓库根目录")
-    
-    args = parser.parse_args()
+def main(args=None):
+    if args is None:
+        parser = argparse.ArgumentParser(description="子模块同步工具")
+        parser.add_argument("--check", action="store_true", help="检测远程更新")
+        parser.add_argument("--sync", metavar="PATHS", help="同步指定子模块（逗号分隔）")
+        parser.add_argument("--sync-all", action="store_true", help="同步所有子模块")
+        parser.add_argument("--repo", default=".", help="仓库根目录")
+        args = parser.parse_args()
     repo_root = Path(args.repo).resolve()
     
     if args.check:
@@ -89,6 +89,11 @@ def main():
         print("[OK] 所有子模块同步完成")
     
     else:
+        parser = argparse.ArgumentParser(description="子模块同步工具")
+        parser.add_argument("--check", action="store_true", help="检测远程更新")
+        parser.add_argument("--sync", metavar="PATHS", help="同步指定子模块（逗号分隔）")
+        parser.add_argument("--sync-all", action="store_true", help="同步所有子模块")
+        parser.add_argument("--repo", default=".", help="仓库根目录")
         parser.print_help()
         return 1
     
