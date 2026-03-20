@@ -16,3 +16,4 @@
 ## 重构指南
 
 - [迁移步骤](./migration.md) - 从当前架构到目标架构的迁移计划
+- [测试设计与实现报告](./test-report.md) - FSM、GitOps、Workflow 层测试设计
