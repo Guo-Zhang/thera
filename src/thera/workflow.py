@@ -77,6 +77,29 @@ class WorkflowEngine:
         self.machine = StateMachine()
         self.strategy = strategy or AutoStrategy()
 
+    def set_strategy(self, strategy_name: str) -> ConvergenceStrategy:
+        """设置收敛策略"""
+        strategies = {
+            "auto": AutoStrategy,
+            "manual": ManualStrategy,
+            "hybrid": HybridStrategy,
+        }
+        
+        if strategy_name not in strategies:
+            raise ValueError(f"Unknown strategy: {strategy_name}. Valid: {list(strategies.keys())}")
+        
+        self.strategy = strategies[strategy_name]()
+        return self.strategy
+
+    def get_strategy_name(self) -> str:
+        """获取当前策略名称"""
+        strategy_map = {
+            AutoStrategy: "auto",
+            ManualStrategy: "manual",
+            HybridStrategy: "hybrid",
+        }
+        return strategy_map.get(type(self.strategy), "unknown")
+
     def doc_check(self, yaml_path: Path) -> ConsistencyResult:
         """执行一致性检查"""
         result = self.git_ops.check_consistency(yaml_path)
@@ -214,3 +237,86 @@ class WorkflowEngine:
     def get_allowed_events(self) -> list[Event]:
         """获取当前允许的事件"""
         return self.machine.get_allowed_events()
+
+    def get_status(self) -> dict:
+        """获取完整状态信息"""
+        state = self.machine.state
+        status_info = {
+            "state": state,
+            "is_error": self.machine.is_error_state(),
+            "allowed_events": self.get_allowed_events(),
+            "history_count": len(self.machine.history),
+        }
+        
+        if hasattr(state, "value"):
+            status_info["state_name"] = state.name
+        
+        if self.machine.is_error_state():
+            status_info["error"] = self.machine.error
+        
+        return status_info
+
+    def get_error_details(self) -> dict | None:
+        """获取错误详情"""
+        if not self.machine.is_error_state():
+            return None
+        
+        return {
+            "error": self.machine.error,
+            "error_name": self.machine.error.name if self.machine.error else None,
+            "suggestion": self._get_error_suggestion(self.machine.error),
+        }
+
+    def _get_error_suggestion(self, error: ErrorState | None) -> str:
+        """获取错误建议"""
+        if error is None:
+            return "无错误"
+        
+        suggestions = {
+            ErrorState.NETWORK_ERROR: "检查网络连接后重试",
+            ErrorState.CONSISTENCY_ERROR: "运行 doc-check 检查配置一致性",
+            ErrorState.DETACHED_HEAD_ERROR: "切换到正确的分支",
+            ErrorState.PERMISSION_ERROR: "检查 git 权限配置",
+        }
+        return suggestions.get(error, "请查看错误详情")
+
+    def get_history(self, limit: int = 10) -> list[dict]:
+        """获取状态历史"""
+        history = []
+        for i, (from_state, event) in enumerate(self.machine.history[-limit:], 1):
+            history.append({
+                "index": len(self.machine.history) - limit + i,
+                "from_state": from_state,
+                "event": event,
+                "event_name": event.name,
+                "from_state_name": from_state.name if hasattr(from_state, "name") else str(from_state),
+            })
+        return history
+
+    def audit(self, since: datetime | None = None, until: datetime | None = None) -> dict:
+        """生成审计报告"""
+        total_transitions = len(self.machine.history)
+        error_count = sum(1 for s, _ in self.machine.history 
+                         if isinstance(s, ErrorState) or 
+                         (hasattr(s, "name") and "ERROR" in s.name))
+        
+        state_distribution = {}
+        for from_state, _ in self.machine.history:
+            state_name = from_state.name if hasattr(from_state, "name") else str(from_state)
+            state_distribution[state_name] = state_distribution.get(state_name, 0) + 1
+        
+        errors = []
+        for i, (state, event) in enumerate(self.machine.history):
+            if isinstance(state, ErrorState) or (hasattr(state, "name") and "ERROR" in state.name):
+                errors.append({
+                    "index": i,
+                    "error": state,
+                    "event": event,
+                })
+        
+        return {
+            "total_transitions": total_transitions,
+            "error_count": error_count,
+            "state_distribution": state_distribution,
+            "errors": errors,
+        }

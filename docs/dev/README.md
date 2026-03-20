@@ -13,6 +13,10 @@
 - [状态机设计](./fsm-design.md) - 状态定义、转移规则、错误处理
 - [Git 操作层设计](./git-ops-design.md) - git_ops.py 模块设计
 
+## 用户功能
+
+- [用户功能设计](./user-features.md) - workflow status/history/audit、策略切换
+
 ## 重构指南
 
 - [迁移步骤](./migration.md) - 从当前架构到目标架构的迁移计划
