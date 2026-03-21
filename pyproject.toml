@@ -8,9 +8,7 @@ version = "0.1.1"
 description = "Quanttide 数字资产治理工具"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "pyyaml>=6.0.3",
-]
+dependencies = []
 
 [project.scripts]
 thera = "thera.cli:main"
