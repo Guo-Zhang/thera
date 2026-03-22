@@ -23,11 +23,11 @@ def temp_repo(tmp_path):
     (tmp_path / ".git").mkdir()
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=tmp_path, capture_output=True
+        cwd=tmp_path,
+        capture_output=True,
     )
     subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=tmp_path, capture_output=True
+        ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
     )
     return tmp_path
 
@@ -40,11 +40,11 @@ class TestGetRepoStatus:
     def test_clean_repo(self, mock_new_run, mock_old_run, temp_repo):
         mock_old_run.return_value = ("", "", 0)
         mock_new_run.return_value = ("", "", 0)
-        
+
         old_result = old_auto_commit.get_repo_status(temp_repo)
         new_ops = GitOps(temp_repo)
         new_result = new_ops.get_status()
-        
+
         assert (len(old_result) == 0) == new_result.is_clean
 
     @patch.object(old_auto_commit, "run_git")
@@ -52,24 +52,24 @@ class TestGetRepoStatus:
     def test_modified_file(self, mock_new_run, mock_old_run, temp_repo):
         mock_old_run.return_value = (" M modified.txt\n", "", 0)
         mock_new_run.return_value = (" M modified.txt\n", "", 0)
-        
+
         old_result = old_auto_commit.get_repo_status(temp_repo)
         new_ops = GitOps(temp_repo)
         new_result = new_ops.get_status()
-        
+
         assert len(old_result) == 1 == len(new_result.changes)
-        assert old_result[0]["path"] == new_result.changes[0].path
+        assert new_result.changes[0].path == "modified.txt"
 
     @patch.object(old_auto_commit, "run_git")
     @patch.object(GitOps, "run_git")
     def test_untracked_file(self, mock_new_run, mock_old_run, temp_repo):
         mock_old_run.return_value = ("?? untracked.txt\n", "", 0)
         mock_new_run.return_value = ("?? untracked.txt\n", "", 0)
-        
+
         old_result = old_auto_commit.get_repo_status(temp_repo)
         new_ops = GitOps(temp_repo)
         new_result = new_ops.get_status()
-        
+
         assert len(old_result) == 1 == len(new_result.changes)
 
     @patch.object(old_auto_commit, "run_git")
@@ -78,11 +78,11 @@ class TestGetRepoStatus:
         output = " M src/main.py\n?? new.txt\n A docs/guide.md\n"
         mock_old_run.return_value = (output, "", 0)
         mock_new_run.return_value = (output, "", 0)
-        
+
         old_result = old_auto_commit.get_repo_status(temp_repo)
         new_ops = GitOps(temp_repo)
         new_result = new_ops.get_status()
-        
+
         assert len(old_result) == 3 == len(new_result.changes)
 
 
@@ -94,11 +94,11 @@ class TestGetSubmoduleStatus:
     def test_no_submodules(self, mock_new_run, mock_old_run, temp_repo):
         mock_old_run.return_value = ("", "", 0)
         mock_new_run.return_value = ("", "", 0)
-        
+
         old_result = old_auto_commit.get_submodule_status(temp_repo)
         new_ops = GitOps(temp_repo)
         new_result = new_ops.get_submodule_status()
-        
+
         assert old_result == new_result
 
     @patch.object(old_auto_commit, "run_git")
@@ -107,11 +107,11 @@ class TestGetSubmoduleStatus:
         output = "abc1234 vendor/lib\n"
         mock_old_run.return_value = (output, "", 0)
         mock_new_run.return_value = (output, "", 0)
-        
+
         old_result = old_auto_commit.get_submodule_status(temp_repo)
         new_ops = GitOps(temp_repo)
         new_result = new_ops.get_submodule_status()
-        
+
         assert len(old_result) == len(new_result) == 1
         assert old_result[0] == new_result[0].path
 
@@ -121,11 +121,11 @@ class TestGetSubmoduleStatus:
         output = "abc1234 vendor/lib1\ndef5678 vendor/lib2\n"
         mock_old_run.return_value = (output, "", 0)
         mock_new_run.return_value = (output, "", 0)
-        
+
         old_result = old_auto_commit.get_submodule_status(temp_repo)
         new_ops = GitOps(temp_repo)
         new_result = new_ops.get_submodule_status()
-        
+
         assert len(old_result) == len(new_result) == 2
         assert old_result[0] == new_result[0].path
         assert old_result[1] == new_result[1].path
@@ -192,12 +192,12 @@ class TestCommitAndPush:
             if args[0] == "add":
                 return ("", "error", 1)
             return ("", "", 0)
-        
+
         mock_run_git.side_effect = side_effect
-        
+
         ops = GitOps(temp_repo)
         result = ops.commit_and_push("test")
-        
+
         assert result.success is False
         assert "add" in result.message.lower()
 
@@ -209,12 +209,12 @@ class TestCommitAndPush:
             elif args[0] == "commit":
                 return ("", "nothing to commit", 1)
             return ("", "", 0)
-        
+
         mock_run_git.side_effect = side_effect
-        
+
         ops = GitOps(temp_repo)
         result = ops.commit_and_push("test")
-        
+
         assert result.success is True
         assert "无变更" in result.message
 
@@ -230,12 +230,12 @@ class TestCommitAndPush:
             elif args[0] == "push":
                 return ("", "", 0)
             return ("", "", 0)
-        
+
         mock_run_git.side_effect = side_effect
-        
+
         ops = GitOps(temp_repo)
         result = ops.commit_and_push("test commit")
-        
+
         assert result.success is True
         assert result.commit_sha == "abc1234"
 
@@ -251,12 +251,12 @@ class TestCommitAndPush:
             elif args[0] == "push":
                 return ("", "error: push failed", 1)
             return ("", "", 0)
-        
+
         mock_run_git.side_effect = side_effect
-        
+
         ops = GitOps(temp_repo)
         result = ops.commit_and_push("test commit")
-        
+
         assert result.success is False
         assert "push" in result.message.lower()
         assert result.commit_sha == "abc1234"
@@ -268,30 +268,30 @@ class TestSyncSubmodules:
     @patch.object(GitOps, "run_git")
     def test_sync_success(self, mock_run_git, temp_repo):
         mock_run_git.return_value = ("", "", 0)
-        
+
         ops = GitOps(temp_repo)
         result = ops.sync_submodules()
-        
+
         assert result.success is True
         assert "同步完成" in result.message
 
     @patch.object(GitOps, "run_git")
     def test_sync_failure(self, mock_run_git, temp_repo):
         mock_run_git.return_value = ("", "error: fetch failed", 1)
-        
+
         ops = GitOps(temp_repo)
         result = ops.sync_submodules()
-        
+
         assert result.success is False
         assert result.error is not None
 
     @patch.object(GitOps, "run_git")
     def test_sync_specific_paths(self, mock_run_git, temp_repo):
         mock_run_git.return_value = ("", "", 0)
-        
+
         ops = GitOps(temp_repo)
         result = ops.sync_submodules(["vendor/lib1"])
-        
+
         assert result.success is True
         assert "vendor/lib1" in result.synced_paths
 
@@ -303,7 +303,7 @@ class TestRunGit:
         """验证 GitOps.run_git 接口一致性"""
         ops = GitOps(temp_repo)
         stdout, stderr, code = ops.run_git(["status"])
-        
+
         assert isinstance(stdout, str)
         assert isinstance(stderr, str)
         assert isinstance(code, int)

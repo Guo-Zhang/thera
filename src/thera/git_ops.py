@@ -15,6 +15,7 @@ import yaml
 
 class ChangeType(Enum):
     """变更类型"""
+
     NEW = auto()
     MODIFIED = auto()
     DELETED = auto()
@@ -24,6 +25,7 @@ class ChangeType(Enum):
 @dataclass
 class FileChange:
     """文件变更"""
+
     path: str
     change_type: ChangeType
     type_prefix: str
@@ -32,6 +34,7 @@ class FileChange:
 @dataclass
 class RepoStatus:
     """仓库状态"""
+
     is_clean: bool
     changes: list[FileChange]
 
@@ -39,6 +42,7 @@ class RepoStatus:
 @dataclass
 class SubmoduleInfo:
     """子模块信息"""
+
     path: str
     local_commit: str
     is_behind: bool
@@ -48,6 +52,7 @@ class SubmoduleInfo:
 @dataclass
 class OperationResult:
     """操作结果基类"""
+
     success: bool
     message: str
     error: Optional[str] = None
@@ -56,6 +61,7 @@ class OperationResult:
 @dataclass
 class ConsistencyResult:
     """一致性检查结果"""
+
     success: bool
     message: str
     is_consistent: bool
@@ -66,12 +72,14 @@ class ConsistencyResult:
 @dataclass
 class SyncResult(OperationResult):
     """同步结果"""
+
     synced_paths: Optional[list[str]] = None
 
 
 @dataclass
 class PushResult(OperationResult):
     """推送结果"""
+
     commit_sha: Optional[str] = None
 
 
@@ -81,9 +89,7 @@ class GitOps:
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
 
-    def run_git(
-        self, args: list[str], capture: bool = True
-    ) -> tuple[str, str, int]:
+    def run_git(self, args: list[str], capture: bool = True) -> tuple[str, str, int]:
         """执行 git 命令"""
         cmd = ["git", "-C", str(self.repo_root)] + args
         result = subprocess.run(cmd, capture_output=capture, text=True)
@@ -112,10 +118,10 @@ class GitOps:
             return RepoStatus(is_clean=True, changes=[])
 
         changes = []
-        for line in stdout.strip().split("\n"):
-            if not line:
+        for line in stdout.split("\n"):
+            if not line or not line.strip():
                 continue
-            status = line[:2].strip()
+            status = line[:2]
             file_path = line[3:].strip()
 
             if status.startswith("??"):

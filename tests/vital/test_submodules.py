@@ -18,7 +18,7 @@ DATA_PATH = Path(__file__).parent.parent.parent.parent.parent / "meta"
 def test_load_submodules():
     """测试加载子模块"""
     subs = load_submodules(DATA_PATH)
-    assert len(subs) == 12
+    assert len(subs) == 17
     assert subs[0]["name"] == "thera"
     assert subs[0]["category"] == "procedural"
 
@@ -26,7 +26,7 @@ def test_load_submodules():
 def test_load_submodules_default_path():
     """测试默认路径加载"""
     subs = load_submodules()
-    assert len(subs) == 12
+    assert len(subs) == 17
 
 
 def test_get_submodules_by_category():
