@@ -1,23 +1,12 @@
 # 开发文档索引
 
-## 架构
+## 核心文档
 
-- [架构设计](./architecture.md) - 整体架构、模块职责、范畴论×类型论分层
+- [架构设计](./architecture.md) - 整体架构、模块职责
+- [用户功能设计](./user-features.md) - refresh 命令设计
 
-## 范畴论层（创造性）
+## Git 操作层
 
-- [GitOps 工作流设计](./gitops-workflow.md) - 工作流组合、收敛策略、Error Monad
-
-## 类型论层（约束性）
-
-- [状态机设计](./fsm-design.md) - 状态定义、转移规则、错误处理
-- [Git 操作层设计](./git-ops-design.md) - git_ops.py 模块设计
-
-## 用户功能
-
-- [用户功能设计](./user-features.md) - workflow status/history/audit、策略切换
-
-## 重构指南
-
-- [迁移步骤](./migration.md) - 从当前架构到目标架构的迁移计划
-- [测试设计与实现报告](./test-report.md) - FSM、GitOps、Workflow 层测试设计
+- [Git 操作封装](./gitops/index.md) - git_ops.py 模块概览
+- [Git 操作封装详情](./gitops/git-ops-design.md) - 完整实现
+- [工作流设计](./gitops/gitops-workflow.md) - refresh 命令设计
