@@ -4,6 +4,7 @@ Refresh 命令
 同步子模块并提交推送主仓库。
 """
 
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -28,13 +29,22 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
     同步子模块并提交推送主仓库。
 
     流程：
-    1. 检测子模块更新
-    2. 拉取最新
-    3. 提交并推送主仓库变更
+    1. 检测子模块内部是否有未提交的变更
+    2. 检测子模块远程更新
+    3. 拉取最新
+    4. 提交并推送主仓库变更
     """
     ops = GitOps(repo_root)
-    updated_submodules = []
 
+    dirty_submodules = _get_dirty_submodules(repo_root)
+    if dirty_submodules:
+        return RefreshResult(
+            success=False,
+            message="子模块有未提交的变更",
+            error=f"请先在子模块中提交: {', '.join(dirty_submodules)}",
+        )
+
+    updated_submodules = []
     submodule_status = ops.get_submodule_status()
 
     for sm in submodule_status:
@@ -94,6 +104,51 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
         message="已是最新",
         updated_submodules=[],
     )
+
+
+def _get_dirty_submodules(repo_root: Path) -> list[str]:
+    """
+    检查所有子模块是否有内部未提交的变更。
+
+    Returns:
+        有脏状态的子模块路径列表
+    """
+    dirty = []
+    submodule_paths = [
+        "docs/archive",
+        "docs/bylaw",
+        "docs/essay",
+        "docs/handbook",
+        "docs/history",
+        "docs/journal",
+        "docs/library",
+        "docs/paper",
+        "docs/profile",
+        "docs/report",
+        "docs/roadmap",
+        "docs/specification",
+        "docs/tutorial",
+        "docs/usercase",
+        "packages/data",
+        "packages/devops",
+        "src/qtadmin",
+        "src/thera",
+    ]
+
+    for path in submodule_paths:
+        full_path = repo_root / path
+        if not full_path.exists():
+            continue
+
+        result = subprocess.run(
+            ["git", "-C", str(full_path), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout.strip():
+            dirty.append(path)
+
+    return dirty
 
 
 def get_submodule_updates(repo_root: Path) -> list[SubmoduleInfo]:

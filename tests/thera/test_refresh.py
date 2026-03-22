@@ -17,10 +17,17 @@ def ops_mock():
     return MagicMock()
 
 
+@pytest.fixture
+def clean_submodules():
+    """模拟所有子模块都是干净的"""
+    with patch("thera.refresh._get_dirty_submodules", return_value=[]):
+        yield
+
+
 class TestRefresh:
     """refresh 函数测试"""
 
-    def test_refresh_no_updates_no_changes(self, ops_mock):
+    def test_refresh_no_updates_no_changes(self, ops_mock, clean_submodules):
         """测试无更新无变更"""
         ops_mock.get_submodule_status.return_value = []
         ops_mock.get_status.return_value = MagicMock(is_clean=True)
@@ -32,7 +39,7 @@ class TestRefresh:
         assert result.message == "已是最新"
         assert result.updated_submodules == []
 
-    def test_refresh_with_submodule_updates(self, ops_mock):
+    def test_refresh_with_submodule_updates(self, ops_mock, clean_submodules):
         """测试有子模块更新"""
         ops_mock.get_submodule_status.return_value = [
             SubmoduleInfo(
@@ -52,7 +59,7 @@ class TestRefresh:
         assert result.message == "子模块已更新"
         assert result.updated_submodules == ["docs/archive"]
 
-    def test_refresh_with_changes_to_commit(self, ops_mock):
+    def test_refresh_with_changes_to_commit(self, ops_mock, clean_submodules):
         """测试有变更需要提交"""
         ops_mock.get_submodule_status.return_value = []
         ops_mock.get_status.return_value = MagicMock(
@@ -69,7 +76,7 @@ class TestRefresh:
         assert result.commit_sha == "abc1234"
         ops_mock.commit_and_push.assert_called_once()
 
-    def test_refresh_dry_run(self, ops_mock):
+    def test_refresh_dry_run(self, ops_mock, clean_submodules):
         """测试预览模式"""
         ops_mock.get_submodule_status.return_value = [
             SubmoduleInfo(
@@ -92,7 +99,7 @@ class TestRefresh:
         ops_mock.sync_submodules.assert_not_called()
         ops_mock.commit_and_push.assert_not_called()
 
-    def test_refresh_commit_failure(self, ops_mock):
+    def test_refresh_commit_failure(self, ops_mock, clean_submodules):
         """测试提交失败"""
         ops_mock.get_submodule_status.return_value = []
         ops_mock.get_status.return_value = MagicMock(
@@ -107,6 +114,18 @@ class TestRefresh:
 
         assert result.success is False
         assert result.error == "push rejected"
+
+    def test_refresh_dirty_submodule(self):
+        """测试子模块有内部未提交变更"""
+        with patch(
+            "thera.refresh._get_dirty_submodules", return_value=["docs/journal"]
+        ):
+            result = refresh(Path("."))
+
+        assert result.success is False
+        assert "子模块有未提交的变更" in result.message
+        assert result.error is not None
+        assert "docs/journal" in result.error
 
 
 class TestGetSubmoduleUpdates:
