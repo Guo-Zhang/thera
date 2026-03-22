@@ -24,18 +24,39 @@ class RefreshResult:
     dry_run: bool = False
 
 
+SUBMODULE_PATHS = [
+    "docs/archive",
+    "docs/bylaw",
+    "docs/essay",
+    "docs/handbook",
+    "docs/history",
+    "docs/journal",
+    "docs/library",
+    "docs/paper",
+    "docs/profile",
+    "docs/report",
+    "docs/roadmap",
+    "docs/specification",
+    "docs/tutorial",
+    "docs/usercase",
+    "packages/data",
+    "packages/devops",
+    "src/qtadmin",
+    "src/thera",
+]
+
+
 def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
     """
     同步子模块并提交推送主仓库。
 
     流程：
     1. 检测子模块内部是否有未提交的变更
-    2. 检测子模块远程更新
-    3. 拉取最新
-    4. 提交并推送主仓库变更
+    2. Fetch 子模块远程
+    3. 检测子模块远程更新
+    4. 拉取最新
+    5. 提交并推送主仓库变更
     """
-    ops = GitOps(repo_root)
-
     dirty_submodules = _get_dirty_submodules(repo_root)
     if dirty_submodules:
         return RefreshResult(
@@ -44,18 +65,21 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
             error=f"请先在子模块中提交: {', '.join(dirty_submodules)}",
         )
 
+    _fetch_submodules(repo_root)
+
     updated_submodules = []
-    submodule_status = ops.get_submodule_status()
+    submodule_status = _get_submodules_behind_remote(repo_root)
 
     for sm in submodule_status:
-        if sm.is_behind:
-            if dry_run:
+        if dry_run:
+            updated_submodules.append(sm.path)
+        else:
+            ops = GitOps(repo_root)
+            result = ops.sync_submodules([sm.path])
+            if result.success:
                 updated_submodules.append(sm.path)
-            else:
-                result = ops.sync_submodules([sm.path])
-                if result.success:
-                    updated_submodules.append(sm.path)
 
+    ops = GitOps(repo_root)
     status = ops.get_status()
 
     if not status.is_clean:
@@ -106,6 +130,61 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
     )
 
 
+def _fetch_submodules(repo_root: Path) -> None:
+    """Fetch 所有子模块的远程"""
+    for path in SUBMODULE_PATHS:
+        full_path = repo_root / path
+        if not full_path.exists():
+            continue
+        subprocess.run(
+            ["git", "-C", str(full_path), "fetch", "origin"],
+            capture_output=True,
+            timeout=10,
+        )
+
+
+def _get_submodules_behind_remote(repo_root: Path) -> list[SubmoduleInfo]:
+    """
+    获取落后于远程的子模块列表。
+
+    比较本地 HEAD 和 origin/main，返回落后的子模块。
+    """
+    behind = []
+
+    for path in SUBMODULE_PATHS:
+        full_path = repo_root / path
+        if not full_path.exists():
+            continue
+
+        result = subprocess.run(
+            ["git", "-C", str(full_path), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        local_head = result.stdout.strip()
+
+        result = subprocess.run(
+            ["git", "-C", str(full_path), "rev-parse", "origin/main"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            continue
+        remote_head = result.stdout.strip()
+
+        if local_head != remote_head:
+            behind.append(
+                SubmoduleInfo(
+                    path=path,
+                    local_commit=local_head[:7],
+                    is_behind=True,
+                    is_detached=False,
+                )
+            )
+
+    return behind
+
+
 def _get_dirty_submodules(repo_root: Path) -> list[str]:
     """
     检查所有子模块是否有内部未提交的变更。
@@ -114,28 +193,8 @@ def _get_dirty_submodules(repo_root: Path) -> list[str]:
         有脏状态的子模块路径列表
     """
     dirty = []
-    submodule_paths = [
-        "docs/archive",
-        "docs/bylaw",
-        "docs/essay",
-        "docs/handbook",
-        "docs/history",
-        "docs/journal",
-        "docs/library",
-        "docs/paper",
-        "docs/profile",
-        "docs/report",
-        "docs/roadmap",
-        "docs/specification",
-        "docs/tutorial",
-        "docs/usercase",
-        "packages/data",
-        "packages/devops",
-        "src/qtadmin",
-        "src/thera",
-    ]
 
-    for path in submodule_paths:
+    for path in SUBMODULE_PATHS:
         full_path = repo_root / path
         if not full_path.exists():
             continue
@@ -153,5 +212,5 @@ def _get_dirty_submodules(repo_root: Path) -> list[str]:
 
 def get_submodule_updates(repo_root: Path) -> list[SubmoduleInfo]:
     """获取需要更新的子模块列表"""
-    ops = GitOps(repo_root)
-    return [sm for sm in ops.get_submodule_status() if sm.is_behind]
+    _fetch_submodules(repo_root)
+    return _get_submodules_behind_remote(repo_root)
