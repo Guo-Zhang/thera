@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from thera.git_ops import FileChange, SubmoduleInfo
+from thera.git_ops import SubmoduleInfo
 from thera.refresh import RefreshResult, get_submodule_updates, refresh
 
 
@@ -107,49 +107,6 @@ class TestRefresh:
 
         assert result.success is False
         assert result.error == "push rejected"
-
-    def test_refresh_dirty_submodule(self, ops_mock):
-        """测试子模块有脏状态"""
-        ops_mock.get_submodule_status.return_value = []
-        ops_mock.get_status.return_value = MagicMock(
-            is_clean=False,
-            changes=[
-                FileChange(
-                    path="src/thera",
-                    change_type=MagicMock(),
-                    type_prefix="root",
-                )
-            ],
-        )
-
-        with patch("thera.refresh.GitOps", return_value=ops_mock):
-            result = refresh(Path("."))
-
-        assert result.success is False
-        assert "子模块有未提交的变更" in result.message
-        assert result.error is not None
-        assert "src/thera" in result.error
-
-    def test_refresh_dirty_submodule_dry_run(self, ops_mock):
-        """测试子模块脏状态预览模式"""
-        ops_mock.get_submodule_status.return_value = []
-        ops_mock.get_status.return_value = MagicMock(
-            is_clean=False,
-            changes=[
-                FileChange(
-                    path="src/thera",
-                    change_type=MagicMock(),
-                    type_prefix="root",
-                )
-            ],
-        )
-
-        with patch("thera.refresh.GitOps", return_value=ops_mock):
-            result = refresh(Path("."), dry_run=True)
-
-        assert result.success is True
-        assert result.dry_run is True
-        assert "无法更新" in result.message
 
 
 class TestGetSubmoduleUpdates:

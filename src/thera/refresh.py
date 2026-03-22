@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from thera.git_ops import GitOps, PushResult, SubmoduleInfo
+from thera.git_ops import GitOps, SubmoduleInfo
 
 
 @dataclass
@@ -30,8 +30,7 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
     流程：
     1. 检测子模块更新
     2. 拉取最新
-    3. 检查主仓库变更（排除子模块脏状态）
-    4. 提交并推送（仅当有有效变更时）
+    3. 提交并推送主仓库变更
     """
     ops = GitOps(repo_root)
     updated_submodules = []
@@ -50,24 +49,6 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
     status = ops.get_status()
 
     if not status.is_clean:
-        dirty_submodules = _get_dirty_submodules(status)
-        has_valid_changes = any(c.path not in dirty_submodules for c in status.changes)
-
-        if dirty_submodules and not has_valid_changes:
-            if dry_run:
-                return RefreshResult(
-                    success=True,
-                    dry_run=True,
-                    message="子模块有未提交的变更，无法更新父仓库指针",
-                    updated_submodules=updated_submodules,
-                )
-            return RefreshResult(
-                success=False,
-                message="子模块有未提交的变更",
-                error=f"请先提交子模块变更: {', '.join(dirty_submodules)}",
-                updated_submodules=updated_submodules,
-            )
-
         if dry_run:
             return RefreshResult(
                 success=True,
@@ -113,40 +94,6 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
         message="已是最新",
         updated_submodules=[],
     )
-
-
-def _get_dirty_submodules(status) -> list[str]:
-    """获取有脏状态的子模块路径"""
-    dirty = []
-    for change in status.changes:
-        if _is_submodule_path(change.path):
-            dirty.append(change.path)
-    return dirty
-
-
-def _is_submodule_path(path: str) -> bool:
-    """检查路径是否是子模块"""
-    submodule_paths = [
-        "docs/archive",
-        "docs/bylaw",
-        "docs/essay",
-        "docs/handbook",
-        "docs/history",
-        "docs/journal",
-        "docs/library",
-        "docs/paper",
-        "docs/profile",
-        "docs/report",
-        "docs/roadmap",
-        "docs/specification",
-        "docs/tutorial",
-        "docs/usercase",
-        "packages/data",
-        "packages/devops",
-        "src/qtadmin",
-        "src/thera",
-    ]
-    return path in submodule_paths
 
 
 def get_submodule_updates(repo_root: Path) -> list[SubmoduleInfo]:
