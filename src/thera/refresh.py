@@ -7,6 +7,7 @@ Refresh 命令
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from subprocess import TimeoutExpired
 from typing import Optional
 
 from thera.git_ops import GitOps, SubmoduleInfo
@@ -136,11 +137,14 @@ def _fetch_submodules(repo_root: Path) -> None:
         full_path = repo_root / path
         if not full_path.exists():
             continue
-        subprocess.run(
-            ["git", "-C", str(full_path), "fetch", "origin"],
-            capture_output=True,
-            timeout=10,
-        )
+        try:
+            subprocess.run(
+                ["git", "-C", str(full_path), "fetch", "origin"],
+                capture_output=True,
+                timeout=10,
+            )
+        except TimeoutExpired:
+            pass
 
 
 def _get_submodules_behind_remote(repo_root: Path) -> list[SubmoduleInfo]:
@@ -156,31 +160,36 @@ def _get_submodules_behind_remote(repo_root: Path) -> list[SubmoduleInfo]:
         if not full_path.exists():
             continue
 
-        result = subprocess.run(
-            ["git", "-C", str(full_path), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-        )
-        local_head = result.stdout.strip()
-
-        result = subprocess.run(
-            ["git", "-C", str(full_path), "rev-parse", "origin/main"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            continue
-        remote_head = result.stdout.strip()
-
-        if local_head != remote_head:
-            behind.append(
-                SubmoduleInfo(
-                    path=path,
-                    local_commit=local_head[:7],
-                    is_behind=True,
-                    is_detached=False,
-                )
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(full_path), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
+            local_head = result.stdout.strip()
+
+            result = subprocess.run(
+                ["git", "-C", str(full_path), "rev-parse", "origin/main"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                continue
+            remote_head = result.stdout.strip()
+
+            if local_head != remote_head:
+                behind.append(
+                    SubmoduleInfo(
+                        path=path,
+                        local_commit=local_head[:7],
+                        is_behind=True,
+                        is_detached=False,
+                    )
+                )
+        except TimeoutExpired:
+            pass
 
     return behind
 
@@ -199,13 +208,17 @@ def _get_dirty_submodules(repo_root: Path) -> list[str]:
         if not full_path.exists():
             continue
 
-        result = subprocess.run(
-            ["git", "-C", str(full_path), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-        )
-        if result.stdout.strip():
-            dirty.append(path)
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(full_path), "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.stdout.strip():
+                dirty.append(path)
+        except TimeoutExpired:
+            pass
 
     return dirty
 
