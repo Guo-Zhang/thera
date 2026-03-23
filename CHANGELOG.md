@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-23
+
+### 重构
+
+- 使用 Typer 重写 CLI
+- 简化命令，只保留 refresh
+- 删除 auto-commit, doc-check, submodule-sync, workflow 命令
+
+### 依赖
+
+- 新增 typer 依赖
+
 ## [0.1.4] - 2026-03-23
 
 ### 修复
