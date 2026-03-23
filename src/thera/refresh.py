@@ -46,8 +46,44 @@ SUBMODULE_PATHS = [
     "src/thera",
 ]
 
+SUBMODULE_NAMES = {
+    "archive": "docs/archive",
+    "bylaw": "docs/bylaw",
+    "essay": "docs/essay",
+    "handbook": "docs/handbook",
+    "history": "docs/history",
+    "journal": "docs/journal",
+    "library": "docs/library",
+    "paper": "docs/paper",
+    "profile": "docs/profile",
+    "report": "docs/report",
+    "roadmap": "docs/roadmap",
+    "specification": "docs/specification",
+    "tutorial": "docs/tutorial",
+    "usercase": "docs/usercase",
+    "data": "packages/data",
+    "devops": "packages/devops",
+    "qtadmin": "src/qtadmin",
+    "thera": "src/thera",
+}
 
-def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
+
+def _get_submodule_paths(submodule: str) -> list[str]:
+    """根据子模块名获取完整路径"""
+    if submodule in SUBMODULE_NAMES:
+        return [SUBMODULE_NAMES[submodule]]
+
+    # 尝试直接匹配路径
+    for path in SUBMODULE_PATHS:
+        if path.endswith(f"/{submodule}") or path == submodule:
+            return [path]
+
+    return []
+
+
+def refresh(
+    repo_root: Path, dry_run: bool = False, submodule: str = None
+) -> RefreshResult:
     """
     同步子模块并提交推送主仓库。
 
@@ -57,6 +93,11 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
     3. 检测子模块远程更新
     4. 拉取最新
     5. 提交并推送主仓库变更
+
+    Args:
+        repo_root: 仓库根目录
+        dry_run: 预览模式，不执行实际变更
+        submodule: 指定子模块名（如 journal, archive）。不指定则同步所有
     """
     dirty_submodules = _get_dirty_submodules(repo_root)
     if dirty_submodules:
@@ -66,10 +107,10 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
             error=f"请先在子模块中提交: {', '.join(dirty_submodules)}",
         )
 
-    _fetch_submodules(repo_root)
+    _fetch_submodules(repo_root, submodule=submodule)
 
     updated_submodules = []
-    submodule_status = _get_submodules_behind_remote(repo_root)
+    submodule_status = _get_submodules_behind_remote(repo_root, submodule=submodule)
 
     for sm in submodule_status:
         if dry_run:
@@ -131,9 +172,11 @@ def refresh(repo_root: Path, dry_run: bool = False) -> RefreshResult:
     )
 
 
-def _fetch_submodules(repo_root: Path) -> None:
-    """Fetch 所有子模块的远程"""
-    for path in SUBMODULE_PATHS:
+def _fetch_submodules(repo_root: Path, submodule: str = None) -> None:
+    """Fetch 子模块的远程"""
+    paths = _get_submodule_paths(submodule) if submodule else SUBMODULE_PATHS
+
+    for path in paths:
         full_path = repo_root / path
         if not full_path.exists():
             continue
@@ -147,15 +190,21 @@ def _fetch_submodules(repo_root: Path) -> None:
             pass
 
 
-def _get_submodules_behind_remote(repo_root: Path) -> list[SubmoduleInfo]:
+def _get_submodules_behind_remote(
+    repo_root: Path, submodule: str = None
+) -> list[SubmoduleInfo]:
     """
     获取落后于远程的子模块列表。
 
     比较本地 HEAD 和 origin/main，返回落后的子模块。
+
+    Args:
+        submodule: 指定子模块名（如 journal）
     """
+    paths = _get_submodule_paths(submodule) if submodule else SUBMODULE_PATHS
     behind = []
 
-    for path in SUBMODULE_PATHS:
+    for path in paths:
         full_path = repo_root / path
         if not full_path.exists():
             continue

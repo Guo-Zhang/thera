@@ -6,20 +6,27 @@ import typer
 from pathlib import Path
 from typing import Optional
 
-from thera.refresh import refresh
+from thera.refresh import refresh as do_refresh
 
 app = typer.Typer(no_args_is_help=True)
 
 
 @app.command()
 def refresh(
-    repo: Path = typer.Argument(".", help="仓库根目录"),
     dry_run: bool = typer.Option(False, "--dry-run", help="预览模式，不执行实际变更"),
+    submodule: Optional[str] = typer.Argument(
+        None, help="子模块名（如 journal, archive）"
+    ),
 ):
     """
     同步子模块并提交推送主仓库。
+
+    用法:
+        thera refresh              # 同步所有子模块
+        thera refresh journal     # 只同步 docs/journal
+        thera refresh --dry-run   # 预览所有
     """
-    result = refresh(repo, dry_run=dry_run)
+    result = do_refresh(Path("."), dry_run=dry_run, submodule=submodule)
 
     if result.updated_submodules:
         for sm in result.updated_submodules:
